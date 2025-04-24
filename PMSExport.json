@@ -1,0 +1,308 @@
+[
+  {
+    "AssemblyPos": "011",
+    "Length": 2570.0,
+    "Height": 184.0,
+    "Thickness": 2498.0,
+    "Weight": 122.0,
+    "Data": [
+      {
+        "Zone": 0,
+        "Material": "VUREN_C24",
+        "Name": "BOVENREGEL",
+        "Profile": "38*184",
+        "Number": 1,
+        "M1": 2.57,
+        "M2": 0.0
+      },
+      {
+        "Zone": 0,
+        "Material": "VUREN_C24",
+        "Name": "ZIJSTIJL",
+        "Profile": "38*184",
+        "Number": 2,
+        "M1": 4.84,
+        "M2": 0.0
+      },
+      {
+        "Zone": 0,
+        "Material": "VUREN_C24",
+        "Name": "STELKOZIJN_STIJL",
+        "Profile": "38*184",
+        "Number": 2,
+        "M1": 4.84,
+        "M2": 0.0
+      },
+      {
+        "Zone": 0,
+        "Material": "VUREN_C24",
+        "Name": "STELKOZIJN_REGEL",
+        "Profile": "38*184",
+        "Number": 1,
+        "M1": 1.75,
+        "M2": 0.0
+      },
+      {
+        "Zone": 0,
+        "Material": "VUREN_C24",
+        "Name": "KOZIJNSTIJL",
+        "Profile": "38*184",
+        "Number": 2,
+        "M1": 4.84,
+        "M2": 0.0
+      },
+      {
+        "Zone": 0,
+        "Material": "VUREN_C24",
+        "Name": "STIJL",
+        "Profile": "38*184",
+        "Number": 2,
+        "M1": 4.84,
+        "M2": 0.0
+      },
+      {
+        "Zone": 0,
+        "Material": "KOZIJN",
+        "Name": "A",
+        "Profile": "PL1",
+        "Number": 1,
+        "M1": 0.0,
+        "M2": 8352.27
+      },
+      {
+        "Zone": 1,
+        "Material": "VUREN_C18",
+        "Name": "RACHEL",
+        "Profile": "22*45",
+        "Number": 4,
+        "M1": 9.57,
+        "M2": 0.0
+      },
+      {
+        "Zone": 1,
+        "Material": "PL_OSB-3_RK",
+        "Name": "PLAAT",
+        "Profile": "PL11",
+        "Number": 2,
+        "M1": 0.0,
+        "M2": 165.12
+      },
+      {
+        "Zone": 1,
+        "Material": "XX_EPDM_SLABBE",
+        "Name": "FOLIE",
+        "Profile": "PL2570",
+        "Number": 1,
+        "M1": 0.0,
+        "M2": 869.23
+      },
+      {
+        "Zone": 2,
+        "Material": "TRESPA",
+        "Name": "PLAAT",
+        "Profile": "PL15",
+        "Number": 2,
+        "M1": 0.0,
+        "M2": 3673.46
+      }
+    ]
+  },
+  {
+    "AssemblyPos": "031",
+    "Length": 3994.0,
+    "Height": 184.0,
+    "Thickness": 2498.0,
+    "Weight": 182.0,
+    "Data": [
+      {
+        "Zone": 0,
+        "Material": "VUREN_C24",
+        "Name": "BOVENREGEL",
+        "Profile": "38*184",
+        "Number": 1,
+        "M1": 3.99,
+        "M2": 0.0
+      },
+      {
+        "Zone": 0,
+        "Material": "VUREN_C24",
+        "Name": "ZIJSTIJL",
+        "Profile": "38*184",
+        "Number": 2,
+        "M1": 4.84,
+        "M2": 0.0
+      },
+      {
+        "Zone": 0,
+        "Material": "VUREN_C24",
+        "Name": "STELKOZIJN_STIJL",
+        "Profile": "38*184",
+        "Number": 2,
+        "M1": 4.84,
+        "M2": 0.0
+      },
+      {
+        "Zone": 0,
+        "Material": "VUREN_C24",
+        "Name": "STELKOZIJN_REGEL",
+        "Profile": "38*184",
+        "Number": 1,
+        "M1": 1.75,
+        "M2": 0.0
+      },
+      {
+        "Zone": 0,
+        "Material": "VUREN_C24",
+        "Name": "KOZIJNSTIJL",
+        "Profile": "38*184",
+        "Number": 2,
+        "M1": 4.84,
+        "M2": 0.0
+      },
+      {
+        "Zone": 0,
+        "Material": "VUREN_C24",
+        "Name": "STIJL",
+        "Profile": "38*184",
+        "Number": 5,
+        "M1": 12.11,
+        "M2": 0.0
+      },
+      {
+        "Zone": 0,
+        "Material": "KOZIJN",
+        "Name": "A",
+        "Profile": "PL1",
+        "Number": 1,
+        "M1": 0.0,
+        "M2": 8352.27
+      },
+      {
+        "Zone": 1,
+        "Material": "VUREN_C18",
+        "Name": "RACHEL",
+        "Profile": "22*45",
+        "Number": 3,
+        "M1": 7.18,
+        "M2": 0.0
+      },
+      {
+        "Zone": 1,
+        "Material": "VUREN_C18",
+        "Name": "RACHEL",
+        "Profile": "44*85",
+        "Number": 5,
+        "M1": 12.04,
+        "M2": 0.0
+      },
+      {
+        "Zone": 1,
+        "Material": "VUREN_C18",
+        "Name": "RACHEL",
+        "Profile": "44*70",
+        "Number": 4,
+        "M1": 2.8,
+        "M2": 0.0
+      },
+      {
+        "Zone": 1,
+        "Material": "PL_OSB-3_RK",
+        "Name": "PLAAT",
+        "Profile": "PL11",
+        "Number": 2,
+        "M1": 0.0,
+        "M2": 357.6
+      },
+      {
+        "Zone": 1,
+        "Material": "XX_EPDM_SLABBE",
+        "Name": "FOLIE",
+        "Profile": "PL3700",
+        "Number": 1,
+        "M1": 0.0,
+        "M2": 1434.23
+      },
+      {
+        "Zone": 1,
+        "Material": "XX_EPDM_SLABBE",
+        "Name": "FOLIE",
+        "Profile": "PL340",
+        "Number": 1,
+        "M1": 0.0,
+        "M2": 126.17
+      },
+      {
+        "Zone": 2,
+        "Material": "PL_FERMACELL_H2O",
+        "Name": "PLAAT",
+        "Profile": "PL12.5",
+        "Number": 5,
+        "M1": 0.0,
+        "M2": 8994.89
+      },
+      {
+        "Zone": 2,
+        "Material": "TRESPA",
+        "Name": "PLAAT",
+        "Profile": "PL15",
+        "Number": 1,
+        "M1": 0.0,
+        "M2": 4043.02
+      },
+      {
+        "Zone": 5,
+        "Material": "2059A",
+        "Name": "LIJM",
+        "Profile": "PL2",
+        "Number": 5,
+        "M1": 0.0,
+        "M2": 8927.22
+      },
+      {
+        "Zone": 5,
+        "Material": "S9.3812",
+        "Name": "KNIP_LATEISTRIP",
+        "Profile": "PL247.8",
+        "Number": 4,
+        "M1": 0.0,
+        "M2": 268.8
+      },
+      {
+        "Zone": 5,
+        "Material": "S9.3812",
+        "Name": "KNIP_LATEISTRIP",
+        "Profile": "PL300",
+        "Number": 14,
+        "M1": 0.0,
+        "M2": 1089.09
+      },
+      {
+        "Zone": 5,
+        "Material": "S9.3812",
+        "Name": "KNIPSTRIP",
+        "Profile": "PL4",
+        "Number": 30,
+        "M1": 0.0,
+        "M2": 814.86
+      },
+      {
+        "Zone": 5,
+        "Material": "S9.3812",
+        "Name": "STREK",
+        "Profile": "PL4",
+        "Number": 154,
+        "M1": 0.0,
+        "M2": 5051.2
+      },
+      {
+        "Zone": 5,
+        "Material": "S9.3812",
+        "Name": "LATEISTRIP_STREK",
+        "Profile": "PL300",
+        "Number": 7,
+        "M1": 0.0,
+        "M2": 638.18
+      }
+    ]
+  }
+]
