@@ -45,7 +45,18 @@
             </div>
         </div>
         <button onclick="voegProjectToe()">Project toevoegen</button>
-        <div id="projectenLijst"></div>
+        <h2>Projectenlijst</h2>
+        <table id="projectenLijst">
+            <thead>
+                <tr>
+                    <th>Projectnummer</th>
+                    <th>Framen Zones</th>
+                    <th>Binnenfolie / Beplating Zones</th>
+                    <th>Sluiting Zones</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
     </main>
 
     <script>
@@ -97,15 +108,15 @@
             });
             localStorage.setItem('projects', JSON.stringify(projects));
 
-            const lijst = document.getElementById('projectenLijst');
-            const projectDiv = document.createElement('div');
-            projectDiv.innerHTML = `
-                <h3>Project ${projectNumber}</h3>
-                <p>Framen zones: ${framenZones.join(', ') || 'Geen'}</p>
-                <p>Binnenfolie / Beplating zones: ${binnenfolieZones.join(', ') || 'Geen'}</p>
-                <p>Sluiting zones: ${sluitingZones.join(', ') || 'Geen'}</p>
+            const tableBody = document.getElementById('projectenLijst').getElementsByTagName('tbody')[0];
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${projectNumber}</td>
+                <td>${framenZones.join(', ') || 'Geen'}</td>
+                <td>${binnenfolieZones.join(', ') || 'Geen'}</td>
+                <td>${sluitingZones.join(', ') || 'Geen'}</td>
             `;
-            lijst.appendChild(projectDiv);
+            tableBody.appendChild(row);
 
             // Reset het formulier
             document.getElementById('projectNumber').value = '';
@@ -118,16 +129,16 @@
 
         window.onload = function() {
             const projects = JSON.parse(localStorage.getItem('projects')) || [];
-            const lijst = document.getElementById('projectenLijst');
+            const tableBody = document.getElementById('projectenLijst').getElementsByTagName('tbody')[0];
             projects.forEach(project => {
-                const projectDiv = document.createElement('div');
-                projectDiv.innerHTML = `
-                    <h3>Project ${project.number}</h3>
-                    <p>Framen zones: ${project.positionZoneMapping.framen.join(', ') || 'Geen'}</p>
-                    <p>Binnenfolie / Beplating zones: ${project.positionZoneMapping.binnenfolie.join(', ') || 'Geen'}</p>
-                    <p>Sluiting zones: ${project.positionZoneMapping.sluiting.join(', ') || 'Geen'}</p>
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${project.number}</td>
+                    <td>${project.positionZoneMapping.framen.join(', ') || 'Geen'}</td>
+                    <td>${project.positionZoneMapping.binnenfolie.join(', ') || 'Geen'}</td>
+                    <td>${project.positionZoneMapping.sluiting.join(', ') || 'Geen'}</td>
                 `;
-                lijst.appendChild(projectDiv);
+                tableBody.appendChild(row);
             });
         };
     </script>
