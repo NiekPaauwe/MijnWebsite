@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opties</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 4px 8px;
+            text-align: left;
+            font-size: 14px;
+            line-height: 1.2;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .formula-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        button {
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+        .delete-option {
+            color: red;
+            background: none;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 4px;
+        }
+        .filter-input {
+            width: 100px;
+            margin-right: 10px;
+        }
+        .formula-editor {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border: 1px solid #ddd;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+        .formula-editor select, .formula-editor input {
+            margin: 5px;
+        }
+        .formula-editor button {
+            margin-top: 10px;
+        }
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <ul>
+            <li><a href="index.html">Hoofdpagina</a></li>
+            <li><a href="bibliotheek.html">Bibliotheek</a></li>
+            <li><a href="opties.html" class="active">Opties</a></li>
+            <li><a href="projecten.html">Projecten</a></li>
+        </ul>
+    </nav>
+    <main>
+        <h1>Opties</h1>
+        <h2>Extra Werkzaamheden</h2>
+        <div>
+            <input type="text" id="newOptionName" placeholder="Nieuwe optie naam">
+            <button onclick="addOption()">Voeg optie toe</button>
+        </div>
+        <table id="optionsTable">
+            <thead>
+                <tr>
+                    <th>Naam</th>
+                    <th>Formule</th>
+                    <th>Zone</th>
+                    <th>Acties</th>
+                </tr>
+            </thead>
+            <tbody id="optionsTableBody">
+                <!-- Opties worden hier dynamisch toegevoegd -->
+            </tbody>
+        </table>
+    </main>
+    <script>
+        function loadData() {
+            const options = JSON.parse(localStorage.getItem('options')) || [];
+            const materialLibrary = JSON.parse(localStorage.getItem('materialLibrary')) || [];
+            // Zorg ervoor dat bestaande opties een zone-veld hebben
+            options.forEach(option => {
+                if (!option.hasOwnProperty('zone')) {
+                    option.zone = '';
+                }
+            });
+            return { options, materialLibrary };
+        }
+
+        function saveData(options) {
+            localStorage.setItem('options', JSON.stringify(options));
+        }
+
+        function formatFormulaForDisplay(formula) {
+            if (!formula || formula.length === 0) return 'Geen formule';
+            if (typeof formula[0] === 'string') {
+                return formula.join(' ');
+            }
+            return formula.map(step => {
+                if (step.type === 'vrij veld') return step.value;
+                if (step.type === 'norm' && step.value !== undefined) return `Norm (${step.value})`;
+                if (step.type === 'elementData') return `Element (${step.property})`;
+                if (['m1', 'm2'].includes(step.type)) {
+                    let display = step.type;
+                    if (step.material) display += ` (${step.material}`;
+                    if (step.name) display += `, ${step.name}`;
+                    if (step.profile) display += `, ${step.profile}`;
+                    if (step.material) display += ')';
+                    return display;
+                }
+                return step.type;
+            }).join(' ');
+        }
+
+        function formatFormulaForStorage(formula) {
+            if (!formula || formula.length === 0) return [];
+            if (typeof formula[0] === 'string') {
+                return formula;
+            }
+            return formula.map(step => {
+                if (!step || !step.type) return '0';
+                if (step.type === 'vrij veld') return step.value || '0';
+                if (step.type === 'norm') return step.value ? `Norm (${step.value})` : 'Norm';
+                if (step.type === 'elementData') return `Element (${step.property})`;
+                if (['m1', 'm2'].includes(step.type)) {
+                    let display = step.type.toUpperCase();
+                    if (step.material) display += ` (${step.material}`;
+                    if (step.name) display += `, ${step.name}`;
+                    if (step.profile) display += `, ${step.profile}`;
+                    if (step.material) display += ')';
+                    return display;
+                }
+                if (step.type === '×') return '*';
+                if (step.type === '÷') return '/';
+                return step.type;
+            }).filter(part => typeof part === 'string');
+        }
+
+        function getMaterialOptions(materialLibrary) {
+            const materials = [...new Set(materialLibrary.map(m => m.Material))].sort();
+            const namesByMaterial = {};
+            const profilesByMaterialAndName = {};
+            materialLibrary.forEach(m => {
+                if (!namesByMaterial[m.Material]) {
+                    namesByMaterial[m.Material] = new Set();
+                }
+                namesByMaterial[m.Material].add(m.Name);
+                const key = `${m.Material}_${m.Name}`;
+                if (!profilesByMaterialAndName[key]) {
+                    profilesByMaterialAndName[key] = new Set();
+                }
+                profilesByMaterialAndName[key].add(m.Profile);
+            });
+            return { materials, namesByMaterial, profilesByMaterialAndName };
+        }
+
+        function createFormulaEditor(formula, callback) {
+            const { materialLibrary } = loadData();
+            const { materials, namesByMaterial, profilesByMaterialAndName } = getMaterialOptions(materialLibrary);
+
+            if (materials.length === 0 && formula.some(step => ['m1', 'm2'].includes(step.type))) {
+                alert('Geen materialen beschikbaar in de bibliotheek voor m1/m2.');
+                return;
+            }
+
+            const overlay = document.createElement('div');
+            overlay.className = 'overlay';
+            document.body.appendChild(overlay);
+
+            const editor = document.createElement('div');
+            editor.className = 'formula-editor';
+            editor.innerHTML = `
+                <h3>Formule bewerken</h3>
+                <div id="formulaSteps"></div>
+                <button onclick="addFormulaStep()">Stap toevoegen</button>
+                <button onclick="saveFormula()">Opslaan</button>
+                <button onclick="cancelFormula()">Annuleren</button>
+            `;
+            document.body.appendChild(editor);
+
+            const stepsContainer = editor.querySelector('#formulaSteps');
+            let steps = [];
+            if (formula.length > 0 && typeof formula[0] === 'string') {
+                steps = formula.map(step => {
+                    if (['M1', 'M2'].includes(step.split(' ')[0])) {
+                        const match = step.match(/^(M1|M2)(?:\s*\(([^,]+)(?:,\s*([^,]+))?(?:,\s*([^)]+))?\))?/);
+                        if (match) {
+                            return {
+                                type: match[1].toLowerCase(),
+                                material: match[2] || undefined,
+                                name: match[3] || undefined,
+                                profile: match[4] || undefined
+                            };
+                        }
+                    } else if (step.startsWith('Element (') || step === 'ElementData') {
+                        const propMatch = step.match(/^Element\s*\(([^)]+)\)/);
+                        return { type: 'elementData', property: propMatch ? propMatch[1] : 'Data' };
+                    } else if (step.startsWith('Norm')) {
+                        const normMatch = step.match(/^Norm\s*\(([^)]+)\)/);
+                        return { type: 'norm', value: normMatch ? parseFloat(normMatch[1]) : undefined };
+                    } else if (step === '*') {
+                        return { type: '×' };
+                    } else if (step === '/') {
+                        return { type: '÷' };
+                    } else if (['+', '-', '(', ')'].includes(step)) {
+                        return { type: step };
+                    } else if (!isNaN(step) || step.trim() !== '') {
+                        return { type: 'vrij veld', value: step };
+                    }
+                    return { type: step.toLowerCase() };
+                });
+            } else {
+                steps = formula.length > 0 ? JSON.parse(JSON.stringify(formula)) : [];
+            }
+
+            function renderSteps() {
+                stepsContainer.innerHTML = '';
+                steps.forEach((step, index) => {
+                    const stepDiv = document.createElement('div');
+                    let materialOptions = '<option value="">Selecteer materiaal</option>';
+                    materials.forEach(mat => {
+                        materialOptions += `<option value="${mat}" ${step.material === mat ? 'selected' : ''}>${mat}</option>`;
+                    });
+
+                    let nameOptions = '<option value="">Alle namen</option>';
+                    if (step.material && namesByMaterial[step.material]) {
+                        [...namesByMaterial[step.material]].sort().forEach(name => {
+                            nameOptions += `<option value="${name}" ${step.name === name ? 'selected' : ''}>${name}</option>`;
+                        });
+                    }
+
+                    let profileOptions = '<option value="">Alle profielen</option>';
+                    if (step.material && step.name) {
+                        const key = `${step.material}_${step.name}`;
+                        if (profilesByMaterialAndName[key]) {
+                            [...profilesByMaterialAndName[key]].sort().forEach(profile => {
+                                profileOptions += `<option value="${profile}" ${step.profile === profile ? 'selected' : ''}>${profile}</option>`;
+                            });
+                        }
+                    }
+
+                    let elementDataOptions = '<option value="">Selecteer eigenschap</option>';
+                    const properties = ['Length', 'Height', 'Thickness', 'Weight', 'Data'];
+                    properties.forEach(prop => {
+                        elementDataOptions += `<option value="${prop}" ${step.property === prop ? 'selected' : ''}>${prop}</option>`;
+                    });
+
+                    stepDiv.innerHTML = `
+                        <select onchange="updateStepType(${index}, this.value)">
+                            <option value="m1" ${step.type === 'm1' ? 'selected' : ''}>m1</option>
+                            <option value="m2" ${step.type === 'm2' ? 'selected' : ''}>m2</option>
+                            <option value="norm" ${step.type === 'norm' ? 'selected' : ''}>norm</option>
+                            <option value="groupNorm" ${step.type === 'groupNorm' ? 'selected' : ''}>groepsnorm</option>
+                            <option value="elementData" ${step.type === 'elementData' ? 'selected' : ''}>Element Gegevens</option>
+                            <option value="(" ${step.type === '(' ? 'selected' : ''}>( Open Haakje</option>
+                            <option value=")" ${step.type === ')' ? 'selected' : ''}>) Sluit Haakje</option>
+                            <option value="+" ${step.type === '+' ? 'selected' : ''}>+</option>
+                            <option value="-" ${step.type === '-' ? 'selected' : ''}>-</option>
+                            <option value="×" ${step.type === '×' ? 'selected' : ''}>×</option>
+                            <option value="÷" ${step.type === '÷' ? 'selected' : ''}>÷</option>
+                            <option value="vrij veld" ${step.type === 'vrij veld' ? 'selected' : ''}>Vrij veld</option>
+                        </select>
+                        ${step.type === 'vrij veld' ? `<input type="text" value="${step.value || ''}" onchange="updateStepValue(${index}, this.value)">` : ''}
+                        ${['m1', 'm2'].includes(step.type) ? `
+                            <select onchange="updateStepMaterial(${index}, this.value)">
+                                ${materialOptions}
+                            </select>
+                            <select onchange="updateStepName(${index}, this.value)">
+                                ${nameOptions}
+                            </select>
+                            <select onchange="updateStepProfile(${index}, this.value)">
+                                ${profileOptions}
+                            </select>
+                        ` : ''}
+                        ${step.type === 'norm' ? `<input type="number" step="0.01" value="${step.value || ''}" onchange="updateStepNorm(${index}, this.value)" placeholder="Norm invullen">` : ''}
+                        ${step.type === 'elementData' ? `
+                            <select onchange="updateStepElementData(${index}, this.value)">
+                                ${elementDataOptions}
+                            </select>
+                        ` : ''}
+                        <button onclick="removeStep(${index})">Verwijder</button>
+                    `;
+                    stepsContainer.appendChild(stepDiv);
+                });
+            }
+
+            window.addFormulaStep = function() {
+                steps.push({ type: 'm1' });
+                renderSteps();
+            };
+
+            window.updateStepType = function(index, type) {
+                const oldStep = steps[index];
+                steps[index] = { 
+                    type, 
+                    value: type === 'vrij veld' || type === 'norm' ? (oldStep.value || '') : undefined,
+                    material: ['m1', 'm2'].includes(type) ? oldStep.material : undefined,
+                    name: ['m1', 'm2'].includes(type) ? oldStep.name : undefined,
+                    profile: ['m1', 'm2'].includes(type) ? oldStep.profile : undefined,
+                    property: type === 'elementData' ? (oldStep.property || 'Data') : undefined
+                };
+                renderSteps();
+            };
+
+            window.updateStepValue = function(index, value) {
+                steps[index].value = value;
+            };
+
+            window.updateStepNorm = function(index, value) {
+                steps[index].value = value ? parseFloat(value) : undefined;
+            };
+
+            window.updateStepMaterial = function(index, material) {
+                steps[index].material = material || undefined;
+                steps[index].name = undefined;
+                steps[index].profile = undefined;
+                renderSteps();
+            };
+
+            window.updateStepName = function(index, name) {
+                steps[index].name = name || undefined;
+                steps[index].profile = undefined;
+                renderSteps();
+            };
+
+            window.updateStepProfile = function(index, profile) {
+                steps[index].profile = profile || undefined;
+                renderSteps();
+            };
+
+            window.updateStepElementData = function(index, property) {
+                steps[index].property = property;
+                renderSteps();
+            };
+
+            window.removeStep = function(index) {
+                steps.splice(index, 1);
+                renderSteps();
+            };
+
+            window.saveFormula = function() {
+                const flatFormula = formatFormulaForStorage(steps);
+                console.log('Opgeslagen formule:', flatFormula);
+                callback(flatFormula);
+                document.body.removeChild(editor);
+                document.body.removeChild(overlay);
+            };
+
+            window.cancelFormula = function() {
+                document.body.removeChild(editor);
+                document.body.removeChild(overlay);
+            };
+
+            renderSteps();
+        }
+
+        function populateOptions() {
+            const { options } = loadData();
+            const tableBody = document.getElementById('optionsTableBody');
+            tableBody.innerHTML = '';
+
+            options.forEach((option, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>
+                        <span onclick="editOptionName(${index}, '${option.name}')">${option.name}</span>
+                    </td>
+                    <td class="formula-column">
+                        <div class="formula-container">
+                            <span>${formatFormulaForDisplay(option.formula)}</span>
+                            <button onclick="editOptionFormula(${index})">Bewerk formule</button>
+                        </div>
+                    </td>
+                    <td>
+                        ${option.zone || ''}
+                        <button onclick="editZone(${index})">Bewerk Zone</button>
+                    </td>
+                    <td>
+                        <button class="delete-option" onclick="deleteOption(${index})">✖</button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        function addOption() {
+            const optionName = document.getElementById('newOptionName').value.trim();
+            if (!optionName) {
+                alert('Voer een naam in voor de optie.');
+                return;
+            }
+            const { options } = loadData();
+            if (options.some(opt => opt.name === optionName)) {
+                alert('Deze optie bestaat al.');
+                return;
+            }
+            options.push({
+                name: optionName,
+                formula: [],
+                zone: ''
+            });
+            saveData(options);
+            document.getElementById('newOptionName').value = '';
+            populateOptions();
+        }
+
+        function deleteOption(index) {
+            if (!confirm('Weet je zeker dat je deze optie wilt verwijderen?')) return;
+            const { options } = loadData();
+            options.splice(index, 1);
+            saveData(options);
+            populateOptions();
+        }
+
+        function editOptionName(index, oldName) {
+            const newName = prompt(`Voer de nieuwe naam in voor "${oldName}":`, oldName);
+            if (newName !== null && newName.trim() !== '') {
+                const { options } = loadData();
+                if (options.some(opt => opt.name === newName.trim())) {
+                    alert('Deze naam bestaat al.');
+                    return;
+                }
+                options[index].name = newName.trim();
+                saveData(options);
+                populateOptions();
+            }
+        }
+
+        function editOptionFormula(index) {
+            const { options } = loadData();
+            createFormulaEditor(options[index].formula || [], (newFormula) => {
+                options[index].formula = newFormula;
+                saveData(options);
+                populateOptions();
+            });
+        }
+
+        function editZone(index) {
+            const { options } = loadData();
+            const newZone = prompt('Voer de zone in:', options[index].zone);
+            if (newZone !== null) {
+                options[index].zone = newZone;
+                saveData(options);
+                populateOptions();
+            }
+        }
+
+        window.onload = function() {
+            populateOptions();
+        };
+    </script>
+</body>
+</html>

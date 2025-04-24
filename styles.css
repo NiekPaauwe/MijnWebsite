@@ -1,0 +1,143 @@
+/* Algemene opmaak */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    line-height: 1.6;
+}
+
+/* Navigatiemenu */
+nav {
+    background-color: #333;
+    padding: 10px 0;
+}
+
+nav ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    text-align: center;
+}
+
+nav ul li {
+    display: inline;
+    margin-right: 20px;
+}
+
+nav ul li a {
+    color: white;
+    text-decoration: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    transition: background-color 0.3s;
+}
+
+nav ul li a:hover {
+    background-color: #555;
+}
+
+nav ul li a.active {
+    background-color: #007BFF;
+}
+
+/* Inhoud */
+main {
+    max-width: 800px;
+    margin: 20px auto;
+    padding: 0 20px;
+}
+
+h1 {
+    color: #333;
+}
+
+/* JSON-upload knop en invoerveld */
+input[type="file"] {
+    margin: 10px 0;
+}
+
+button {
+    background-color: #007BFF;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    margin-right: 5px;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+#output {
+    margin-top: 10px;
+    white-space: pre-wrap;
+}
+
+/* Tabel voor materiaalbibliotheek */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+th {
+    background-color: #f2f2f2;
+    color: #333;
+}
+
+tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+tr:hover {
+    background-color: #f5f5f5;
+}
+
+/* Groepskoppen */
+.group-header {
+    background-color: #e0e0e0;
+    font-weight: bold;
+}
+
+/* Formulier voor groepen */
+input[type="text"] {
+    padding: 8px;
+    margin-right: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+select {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+/* Knoppen in groepskoppen */
+.group-header button {
+    padding: 6px 10px;
+    font-size: 0.9em;
+}
+
+/* Formule-editor */
+#formulaEditor {
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.formula-step {
+    margin: 5px 0;
+}
+
+.formula-step input {
+    width: 60px;
+    margin-left: 5px;
+}

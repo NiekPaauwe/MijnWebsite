@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bibliotheek</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 4px 8px;
+            text-align: left;
+            font-size: 14px;
+            line-height: 1.2;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .group-container {
+            margin-top: 10px;
+        }
+        .group-header-container {
+            display: flex;
+            align-items: center;
+        }
+        .group-header {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            background-color: #e0e0e0;
+        }
+        .group-header h3 {
+            margin: 0;
+            flex-grow: 1;
+        }
+        .toggle-icon {
+            margin-right: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .rename-icon {
+            margin-left: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .material-table {
+            display: none; /* Standaard ingeklapt */
+        }
+        .material-table.visible {
+            display: table;
+        }
+        .material-table .formula-column {
+            width: 25%;
+            white-space: nowrap;
+        }
+        .formula-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        button {
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+        .delete-group {
+            color: red;
+            background: none;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 8px;
+        }
+        .group-norm {
+            margin-right: 10px;
+            width: 80px;
+        }
+        .formula-editor {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border: 1px solid #ddd;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+        .formula-editor select, .formula-editor input {
+            margin: 5px;
+        }
+        .formula-editor button {
+            margin-top: 10px;
+        }
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+    </style>
+</head>
+<body>
+   <nav>
+    <ul>
+        <li><a href="index.html">Hoofdpagina</a></li>
+        <li><a href="bibliotheek.html" class="active">Bibliotheek</a></li>
+        <li><a href="opties.html">Opties</a></li>
+        <li><a href="projecten.html">Projecten</a></li>
+    </ul>
+</nav>
+    <main>
+        <h1>Bibliotheek</h1>
+        <h2>Groepen en Materialen</h2>
+        <div>
+            <input type="text" id="newGroupName" placeholder="Nieuwe groep naam">
+            <button onclick="addGroup()">Voeg groep toe</button>
+        </div>
+        <div id="groupContainer">
+            <!-- Groepen en materialen worden hier dynamisch toegevoegd -->
+        </div>
+    </main>
+    <script>
+        console.log('Script wordt geladen');
+
+        // Object om inklapstatus van groepen bij te houden
+        const groupStates = {};
+
+        function loadData() {
+            console.log('loadData() uitgevoerd');
+            const materialLibrary = JSON.parse(localStorage.getItem('materialLibrary')) || [];
+            const groups = JSON.parse(localStorage.getItem('groups')) || [];
+            const groupFormulas = JSON.parse(localStorage.getItem('groupFormulas')) || {};
+            const groupNorms = JSON.parse(localStorage.getItem('groupNorms')) || {};
+            return { materialLibrary, groups, groupFormulas, groupNorms };
+        }
+
+        function saveData(materialLibrary, groups, groupFormulas, groupNorms) {
+            console.log('saveData() uitgevoerd');
+            localStorage.setItem('materialLibrary', JSON.stringify(materialLibrary));
+            localStorage.setItem('groups', JSON.stringify(groups));
+            localStorage.setItem('groupFormulas', JSON.stringify(groupFormulas));
+            localStorage.setItem('groupNorms', JSON.stringify(groupNorms));
+        }
+
+        function formatFormula(formula) {
+            console.log('formatFormula() uitgevoerd', formula);
+            if (!formula || formula.length === 0) return 'Geen formule';
+            return formula.map(step => step.type === 'vrij veld' ? step.value : step.type).join(' ');
+        }
+
+        function toggleGroup(groupId) {
+            console.log('toggleGroup() uitgevoerd', groupId);
+            const table = document.getElementById(`materialTable-${groupId}`);
+            const icon = document.getElementById(`toggleIcon-${groupId}`);
+            if (table.classList.contains('visible')) {
+                table.classList.remove('visible');
+                icon.textContent = '▼';
+                groupStates[groupId] = false;
+            } else {
+                table.classList.add('visible');
+                icon.textContent = '▲';
+                groupStates[groupId] = true;
+            }
+        }
+
+function populateGroupsAndMaterials() {
+    console.log('populateGroupsAndMaterials() uitgevoerd');
+    const { materialLibrary, groups, groupFormulas, groupNorms } = loadData();
+    const container = document.getElementById('groupContainer');
+    container.innerHTML = '';
+
+    // Materialen zonder groep
+    const ungroupedMaterials = materialLibrary.filter(material => !material.Group || material.Group === '');
+    if (ungroupedMaterials.length > 0) {
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'group-container';
+        groupDiv.innerHTML = `
+            <div class="group-header">
+                <span class="toggle-icon" id="toggleIcon-ungrouped" onclick="toggleGroup('ungrouped')">${groupStates['ungrouped'] ? '▲' : '▼'}</span>
+                <h3>Geen groep</h3>
+            </div>
+            <table id="materialTable-ungrouped" class="material-table ${groupStates['ungrouped'] ? 'visible' : ''}">
+                <thead>
+                    <tr>
+                        <th>Material</th>
+                        <th>Name</th>
+                        <th>Profile</th>
+                        <th>Group</th>
+                        <th>Norm</th>
+                        <th class="formula-column">Formule</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${ungroupedMaterials.map((material) => `
+                        <tr>
+                            <td>${material.Material}</td>
+                            <td>${material.Name}</td>
+                            <td>${material.Profile}</td>
+                            <td>
+                                <select onchange="updateMaterialGroup('${material.id}', this.value)">
+                                    <option value="">Geen groep</option>
+                                    ${groups.map(group => `
+                                        <option value="${group}" ${material.Group === group ? 'selected' : ''}>${group}</option>
+                                    `).join('')}
+                                </select>
+                            </td>
+                            <td>
+                                <input type="number" value="${material.Norm !== null && material.Norm !== undefined ? material.Norm : ''}" 
+                                       onchange="updateMaterialNorm('${material.id}', this.value)" step="0.01" placeholder="Geen norm">
+                            </td>
+                            <td class="formula-column">
+                                <div class="formula-container">
+                                    <span>${formatFormula(material.Formula)}</span>
+                                    <button onclick="editMaterialFormula('${material.id}')">Bewerk formule</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+        container.appendChild(groupDiv);
+    }
+
+    // Materialen per groep
+    groups.forEach((group, groupIndex) => {
+        const groupMaterials = materialLibrary.filter(material => material.Group === group);
+        const formula = groupFormulas[group] || [];
+        const norm = groupNorms[group] !== undefined ? groupNorms[group] : null;
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'group-container';
+        groupDiv.innerHTML = `
+            <div class="group-header-container">
+                <div class="group-header">
+                    <span class="toggle-icon" id="toggleIcon-${group}" onclick="toggleGroup('${group}')">${groupStates[group] ? '▲' : '▼'}</span>
+                    <h3>${group}</h3>
+                    <span class="rename-icon" onclick="renameGroup('${group}')">✏️</span>
+                    <input type="number" class="group-norm" value="${norm !== null ? norm : ''}" 
+                           onchange="updateGroupNorm('${group}', this.value)" step="0.01" placeholder="Norm">
+                    <button onclick="editGroupFormula('${group}')">Bewerk groepsformule</button>
+                </div>
+                <button class="delete-group" onclick="deleteGroup(${groupIndex})" title="Verwijder groep">✖</button>
+            </div>
+            <table id="materialTable-${group}" class="material-table ${groupStates[group] ? 'visible' : ''}">
+                <thead>
+                    <tr>
+                        <th>Material</th>
+                        <th>Name</th>
+                        <th>Profile</th>
+                        <th>Group</th>
+                        <th>Norm</th>
+                        <th class="formula-column">Formule</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${groupMaterials.length > 0 ? groupMaterials.map((material) => `
+                        <tr>
+                            <td>${material.Material}</td>
+                            <td>${material.Name}</td>
+                            <td>${material.Profile}</td>
+                            <td>
+                                <select onchange="updateMaterialGroup('${material.id}', this.value)">
+                                    <option value="">Geen groep</option>
+                                    ${groups.map(g => `
+                                        <option value="${g}" ${material.Group === g ? 'selected' : ''}>${g}</option>
+                                    `).join('')}
+                                </select>
+                            </td>
+                            <td>
+                                <input type="number" value="${material.Norm !== null && material.Norm !== undefined ? material.Norm : ''}" 
+                                       onchange="updateMaterialNorm('${material.id}', this.value)" step="0.01" placeholder="Geen norm">
+                            </td>
+                            <td class="formula-column">
+                                <div class="formula-container">
+                                    <span>${formatFormula(material.Formula)}</span>
+                                    <button onclick="editMaterialFormula('${material.id}')">Bewerk formule</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join('') : `
+                        <tr>
+                            <td colspan="6">Geen materialen in deze groep.</td>
+                        </tr>
+                    `}
+                </tbody>
+            </table>
+        `;
+        container.appendChild(groupDiv);
+    });
+
+    console.log('populateGroupsAndMaterials() voltooid');
+}
+
+        function updateMaterialGroup(materialId, group) {
+            console.log('updateMaterialGroup() uitgevoerd', materialId, group);
+            const { materialLibrary, groups, groupFormulas, groupNorms } = loadData();
+            const material = materialLibrary.find(m => m.id === materialId);
+            if (material) {
+                material.Group = group;
+                saveData(materialLibrary, groups, groupFormulas, groupNorms);
+                populateGroupsAndMaterials();
+            } else {
+                console.error('Materiaal niet gevonden:', materialId);
+            }
+        }
+
+        function updateMaterialNorm(materialId, norm) {
+            console.log('updateMaterialNorm() uitgevoerd', materialId, norm);
+            const { materialLibrary, groups, groupFormulas, groupNorms } = loadData();
+            const material = materialLibrary.find(m => m.id === materialId);
+            if (material) {
+                material.Norm = norm === '' ? null : parseFloat(norm);
+                saveData(materialLibrary, groups, groupFormulas, groupNorms);
+                populateGroupsAndMaterials();
+            } else {
+                console.error('Materiaal niet gevonden:', materialId);
+            }
+        }
+
+function updateGroupNorm(group, norm) {
+    console.log('updateGroupNorm() uitgevoerd', group, norm);
+    const { materialLibrary, groups, groupFormulas, groupNorms } = loadData();
+    console.log('Huidige materialLibrary:', materialLibrary);
+    console.log('Huidige groupNorms voor update:', groupNorms);
+    groupNorms[group] = norm === '' ? null : parseFloat(norm);
+    console.log('groupNorms na update:', groupNorms);
+    // Pas de norm toe op alle materialen in de groep
+    let updatedMaterials = 0;
+    materialLibrary.forEach(material => {
+        console.log('Controleer materiaal:', material.id, 'met groep:', material.Group);
+        if (material.Group === group) {
+            material.Norm = groupNorms[group];
+            updatedMaterials++;
+            console.log('Norm bijgewerkt voor materiaal:', material.id, 'nieuwe norm:', material.Norm);
+        }
+    });
+    console.log('Aantal bijgewerkte materialen:', updatedMaterials);
+    saveData(materialLibrary, groups, groupFormulas, groupNorms);
+    console.log('materialLibrary na update:', materialLibrary);
+    populateGroupsAndMaterials();
+}
+
+        function createFormulaEditor(formula, callback) {
+            const overlay = document.createElement('div');
+            overlay.className = 'overlay';
+            document.body.appendChild(overlay);
+
+            const editor = document.createElement('div');
+            editor.className = 'formula-editor';
+            editor.innerHTML = `
+                <h3>Formule bewerken</h3>
+                <div id="formulaSteps"></div>
+                <button onclick="addFormulaStep()">Stap toevoegen</button>
+                <button onclick="saveFormula()">Opslaan</button>
+                <button onclick="cancelFormula()">Annuleren</button>
+            `;
+            document.body.appendChild(editor);
+
+            const stepsContainer = editor.querySelector('#formulaSteps');
+            let steps = formula.length > 0 ? formula : [];
+
+            function renderSteps() {
+                stepsContainer.innerHTML = '';
+                steps.forEach((step, index) => {
+                    const stepDiv = document.createElement('div');
+                    stepDiv.innerHTML = `
+                        <select onchange="updateStepType(${index}, this.value)">
+                            <option value="m1" ${step.type === 'm1' ? 'selected' : ''}>m1</option>
+                            <option value="m2" ${step.type === 'm2' ? 'selected' : ''}>m2</option>
+                            <option value="norm" ${step.type === 'norm' ? 'selected' : ''}>norm</option>
+                            <option value="groupNorm" ${step.type === 'groupNorm' ? 'selected' : ''}>groepsnorm</option>
+                            <option value="+" ${step.type === '+' ? 'selected' : ''}>+</option>
+                            <option value="-" ${step.type === '-' ? 'selected' : ''}>-</option>
+                            <option value="×" ${step.type === '×' ? 'selected' : ''}>×</option>
+                            <option value="÷" ${step.type === '÷' ? 'selected' : ''}>÷</option>
+                            <option value="vrij veld" ${step.type === 'vrij veld' ? 'selected' : ''}>Vrij veld</option>
+                        </select>
+                        ${step.type === 'vrij veld' ? `<input type="text" value="${step.value || ''}" onchange="updateStepValue(${index}, this.value)">` : ''}
+                        <button onclick="removeStep(${index})">Verwijder</button>
+                    `;
+                    stepsContainer.appendChild(stepDiv);
+                });
+            }
+
+            window.addFormulaStep = function() {
+                steps.push({ type: 'm1' });
+                renderSteps();
+            };
+
+            window.updateStepType = function(index, type) {
+                steps[index] = { type: type, value: type === 'vrij veld' ? (steps[index].value || '') : undefined };
+                renderSteps();
+            };
+
+            window.updateStepValue = function(index, value) {
+                steps[index].value = value;
+            };
+
+            window.removeStep = function(index) {
+                steps.splice(index, 1);
+                renderSteps();
+            };
+
+            window.saveFormula = function() {
+                callback(steps.filter(step => step.type !== undefined));
+                document.body.removeChild(editor);
+                document.body.removeChild(overlay);
+            };
+
+            window.cancelFormula = function() {
+                document.body.removeChild(editor);
+                document.body.removeChild(overlay);
+            };
+
+            renderSteps();
+        }
+
+        function editMaterialFormula(materialId) {
+            console.log('editMaterialFormula() uitgevoerd', materialId);
+            const { materialLibrary, groups, groupFormulas, groupNorms } = loadData();
+            const material = materialLibrary.find(m => m.id === materialId);
+            if (material) {
+                createFormulaEditor(material.Formula || [], (newFormula) => {
+                    material.Formula = newFormula;
+                    saveData(materialLibrary, groups, groupFormulas, groupNorms);
+                    populateGroupsAndMaterials();
+                });
+            } else {
+                console.error('Materiaal niet gevonden:', materialId);
+            }
+        }
+
+        function editGroupFormula(group) {
+            console.log('editGroupFormula() uitgevoerd', group);
+            const { materialLibrary, groups, groupFormulas, groupNorms } = loadData();
+            createFormulaEditor(groupFormulas[group] || [], (newFormula) => {
+                if (newFormula.length > 0) {
+                    groupFormulas[group] = newFormula;
+                    // Pas de formule toe op alle materialen in de groep
+                    materialLibrary.forEach(material => {
+                        if (material.Group === group) {
+                            material.Formula = [...newFormula];
+                        }
+                    });
+                } else {
+                    delete groupFormulas[group];
+                    // Verwijder de formule van alle materialen in de groep
+                    materialLibrary.forEach(material => {
+                        if (material.Group === group) {
+                            material.Formula = [];
+                        }
+                    });
+                }
+                saveData(materialLibrary, groups, groupFormulas, groupNorms);
+                populateGroupsAndMaterials();
+            });
+        }
+
+        function addGroup() {
+            console.log('addGroup() uitgevoerd');
+            const groupName = document.getElementById('newGroupName').value.trim();
+            if (!groupName) {
+                alert('Voer een groepsnaam in.');
+                return;
+            }
+            const { materialLibrary, groups, groupFormulas, groupNorms } = loadData();
+            if (groups.includes(groupName)) {
+                alert('Deze groep bestaat al.');
+                return;
+            }
+            groups.push(groupName);
+            saveData(materialLibrary, groups, groupFormulas, groupNorms);
+            document.getElementById('newGroupName').value = '';
+            populateGroupsAndMaterials();
+        }
+
+        function deleteGroup(index) {
+            console.log('deleteGroup() uitgevoerd', index);
+            if (!confirm('Weet je zeker dat je deze groep wilt verwijderen? Materialen in deze groep worden ontkoppeld.')) return;
+            const { materialLibrary, groups, groupFormulas, groupNorms } = loadData();
+            const groupName = groups[index];
+            groups.splice(index, 1);
+            delete groupFormulas[groupName];
+            delete groupNorms[groupName];
+            materialLibrary.forEach(material => {
+                if (material.Group === groupName) {
+                    material.Group = '';
+                }
+            });
+            delete groupStates[groupName];
+            saveData(materialLibrary, groups, groupFormulas, groupNorms);
+            populateGroupsAndMaterials();
+        }
+
+        function renameGroup(oldName) {
+            console.log('renameGroup() uitgevoerd', oldName);
+            const { materialLibrary, groups, groupFormulas, groupNorms } = loadData();
+            const newName = prompt(`Voer de nieuwe naam in voor groep "${oldName}":`, oldName);
+            if (newName !== null && newName.trim() !== '') {
+                if (groups.includes(newName.trim())) {
+                    alert('Deze groepsnaam bestaat al.');
+                    return;
+                }
+                const index = groups.indexOf(oldName);
+                if (index !== -1) {
+                    groups[index] = newName.trim();
+                    if (groupFormulas[oldName]) {
+                        groupFormulas[newName.trim()] = groupFormulas[oldName];
+                        delete groupFormulas[oldName];
+                    }
+                    if (groupNorms[oldName] !== undefined) {
+                        groupNorms[newName.trim()] = groupNorms[oldName];
+                        delete groupNorms[oldName];
+                    }
+                    materialLibrary.forEach(material => {
+                        if (material.Group === oldName) {
+                            material.Group = newName.trim();
+                        }
+                    });
+                    if (groupStates[oldName] !== undefined) {
+                        groupStates[newName.trim()] = groupStates[oldName];
+                        delete groupStates[oldName];
+                    }
+                    saveData(materialLibrary, groups, groupFormulas, groupNorms);
+                    populateGroupsAndMaterials();
+                }
+            }
+        }
+
+        window.onload = function() {
+            console.log('window.onload uitgevoerd');
+            populateGroupsAndMaterials();
+        };
+
+        console.log('Script volledig geladen');
+    </script>
+</body>
+</html>

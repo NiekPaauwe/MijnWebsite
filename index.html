@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hoofdpagina</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        #warningMessage, #optionWarningMessage {
+            color: red;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <ul>
+            <li><a href="index.html" class="active">Hoofdpagina</a></li>
+            <li><a href="bibliotheek.html">Bibliotheek</a></li>
+            <li><a href="opties.html">Opties</a></li>
+            <li><a href="projecten.html">Projecten</a></li>
+        </ul>
+    </nav>
+    <main>
+        <h1>Welkom op de Hoofdpagina</h1>
+        <p>Selecteer een project om de bewerkingstijd per zone te berekenen.</p>
+        <div>
+            <label for="projectFilter">Selecteer project:</label>
+            <select id="projectFilter" onchange="updateProject(); console.log('Projectfilter gewijzigd:', this.value);">
+                <option value="">Kies een project</option>
+            </select>
+        </div>
+        <div>
+            <label for="elementFilter">Filter op element:</label>
+            <select id="elementFilter" onchange="updateTable()">
+                <option value="all">Alles</option>
+            </select>
+        </div>
+        <div id="summary"></div>
+        <div id="warningMessage"></div>
+        <div id="optionWarningMessage"></div>
+        <table id="calculationTable">
+            <thead>
+                <tr>
+                    <th>Zone</th>
+                    <th>Materiaal</th>
+                    <th>Formule</th>
+                    <th>Bewerkingstijd</th>
+                </tr>
+            </thead>
+            <tbody id="calculationTableBody"></tbody>
+        </table>
+    </main>
+
+    <script>
+        let selectedProject = null;
+        let jsonData = [];
+
+        function loadData() {
+            const materialLibrary = JSON.parse(localStorage.getItem('materialLibrary')) || [];
+            const groupFormulas = JSON.parse(localStorage.getItem('groupFormulas')) || {};
+            const groupNorms = JSON.parse(localStorage.getItem('groupNorms')) || {};
+            const options = JSON.parse(localStorage.getItem('options')) || [];
+            const projects = JSON.parse(localStorage.getItem('projects')) || [];
+            return { materialLibrary, groupFormulas, groupNorms, options, projects };
+        }
+
+        function updateProject() {
+            const { projects, options } = loadData();
+            const projectNumber = String(document.getElementById('projectFilter').value);
+            console.log('Beschikbare projecten:', projects);
+            console.log('Geselecteerd projectnummer:', projectNumber);
+            selectedProject = projects.find(proj => String(proj.number) === projectNumber) || null;
+
+            if (selectedProject && selectedProject.jsonFiles && Array.isArray(selectedProject.jsonFiles)) {
+                const nestedData = selectedProject.jsonFiles
+                    .filter(file => file && file.data && Array.isArray(file.data))
+                    .map(file => file.data);
+                jsonData = nestedData.flat().filter(element => element && typeof element === 'object' && (element.AssemblyPos || element.Zone));
+            } else {
+                jsonData = [];
+                console.log('Geen geldige JSON-bestanden gevonden voor het project.');
+            }
+
+            console.log('Geselecteerd project:', selectedProject);
+            console.log('Geladen JSON-data:', jsonData);
+            console.log('Projectopties:', selectedProject ? selectedProject.options : 'Geen project geselecteerd');
+            console.log('Beschikbare opties:', options);
+
+            const elementFilter = document.getElementById('elementFilter');
+            elementFilter.innerHTML = '<option value="all">Alles</option>';
+            if (jsonData.length > 0) {
+                const elements = new Set();
+                jsonData.forEach(element => {
+                    if (element.AssemblyPos) {
+                        elements.add(element.AssemblyPos);
+                    } else if (element.Zone) {
+                        elements.add('Standaard Element');
+                    }
+                });
+                Array.from(elements).sort().forEach(element => {
+                    const option = document.createElement('option');
+                    option.value = element;
+                    option.textContent = element;
+                    elementFilter.appendChild(option);
+                });
+            }
+
+            document.getElementById('calculationTableBody').innerHTML = '';
+            document.getElementById('summary').innerHTML = '';
+            document.getElementById('warningMessage').innerHTML = '';
+            document.getElementById('optionWarningMessage').innerHTML = '';
+
+            if (jsonData.length > 0) {
+                updateTable();
+            } else {
+                console.log('Geen JSON-data om te verwerken.');
+            }
+        }
+
+        function updateTable() {
+            const selectedElement = document.getElementById('elementFilter').value;
+            console.log('Update tabel met geselecteerd element:', selectedElement);
+            calculateProcessingTime(jsonData, selectedElement);
+        }
+
+        function formatFormula(formula, material, groupNorm, elementSurface, kozijnSurface, elementData, element) {
+            if (!Array.isArray(formula) || formula.length === 0) {
+                return { display: 'Geen formule', values: 'N/A' };
+            }
+
+            let displayFormula = '';
+            let valueDetails = '';
+            const formulaParts = [];
+
+            formula.forEach((part, index) => {
+                let partString = part;
+                let normValue = null;
+
+                if (typeof part === 'string' && part.toLowerCase().startsWith('norm (') && part.endsWith(')')) {
+                    const match = part.match(/^norm\s*\((\d*\.?\d+)\)$/i);
+                    if (match) {
+                        normValue = parseFloat(match[1]);
+                        partString = 'norm';
+                    } else {
+                        console.warn(`Ongeldige norm-formaat: ${part}`);
+                    }
+                } else if (typeof part === 'object' && part.type === 'norm' && part.value) {
+                    normValue = parseFloat(part.value);
+                    partString = 'norm';
+                } else if (typeof part === 'string' && part.toLowerCase().startsWith('element (') && part.endsWith(')')) {
+                    const match = part.match(/^element\s*\(([^)]+)\)$/i);
+                    if (match) {
+                        const property = match[1].trim();
+                        partString = `element_${property.toLowerCase()}`;
+                    } else {
+                        console.warn(`Ongeldig element-formaat: ${part}`);
+                    }
+                } else if (typeof part === 'object' && part.type === 'element' && part.property) {
+                    partString = `element_${part.property.toLowerCase()}`;
+                } else if (typeof part === 'object' && part.type) {
+                    partString = part.type === 'vrij veld' ? part.value || '0' : part.type;
+                    if (['m1', 'm2'].includes(part.type) && (part.material || part.name || part.profile)) {
+                        partString = part.type.toUpperCase();
+                        partString += ' (';
+                        if (part.material) partString += part.material;
+                        if (part.name) partString += `, ${part.name}`;
+                        if (part.profile) partString += `, ${part.profile}`;
+                        partString += ')';
+                    }
+                    if (part.type === '×') partString = '*';
+                    if (part.type === '÷') partString = '/';
+                } else if (typeof part !== 'string') {
+                    console.warn(`Ongeldig formuleonderdeel op index ${index}:`, part);
+                    displayFormula += 'Ongeldig';
+                    valueDetails += `Onderdeel ${index} = Ongeldig`;
+                    formulaParts.push(0);
+                    if (index < formula.length - 1) valueDetails += ', ';
+                    return;
+                }
+
+                let value;
+                if (partString.toLowerCase() === 'norm') {
+                    value = normValue !== null ? normValue : (material && material.Norm !== undefined ? material.Norm : (groupNorm !== undefined ? groupNorm : 0));
+                    displayFormula += `Norm (${value})`;
+                    valueDetails += `Norm = ${value}`;
+                } else if (partString.toLowerCase() === 'm1' || partString.startsWith('M1 ')) {
+                    value = material && material.M1 !== undefined ? material.M1 : 0;
+                    displayFormula += partString;
+                    valueDetails += `M1 = ${value}`;
+                } else if (partString.toLowerCase() === 'm2' || partString.startsWith('M2 ')) {
+                    value = material && material.M2 !== undefined ? material.M2 : 0;
+                    displayFormula += partString;
+                    valueDetails += `M2 = ${value}`;
+                } else if (partString === 'ElementSurface') {
+                    value = elementSurface || 0;
+                    displayFormula += 'ElementSurface';
+                    valueDetails += `ElementSurface = ${value}`;
+                } else if (partString === 'KozijnSurface') {
+                    value = kozijnSurface || 0;
+                    displayFormula += 'KozijnSurface';
+                    valueDetails += `KozijnSurface = ${value}`;
+                } else if (partString === 'element_length') {
+                    value = element && element.Length !== undefined ? element.Length : 0;
+                    displayFormula += 'Element (Length)';
+                    valueDetails += `Element (Length) = ${value}`;
+                } else if (partString === 'element_thickness') {
+                    value = element && element.Thickness !== undefined ? element.Thickness : 0;
+                    displayFormula += 'Element (Thickness)';
+                    valueDetails += `Element (Thickness) = ${value}`;
+                } else if (partString === 'element_height') {
+                    value = element && element.Height !== undefined ? element.Height : 0;
+                    displayFormula += 'Element (Height)';
+                    valueDetails += `Element (Height) = ${value}`;
+                } else if (partString === 'element_weight') {
+                    value = element && element.Weight !== undefined ? element.Weight : 0;
+                    displayFormula += 'Element (Weight)';
+                    valueDetails += `Element (Weight) = ${value}`;
+                } else if (['+', '-', '*', '/', '(', ')'].includes(partString)) {
+                    value = partString;
+                    displayFormula += partString;
+                    valueDetails += partString;
+                } else if (partString === 'ElementData') {
+                    value = elementData ? elementData.length : 0;
+                    displayFormula += 'ElementData';
+                    valueDetails += `ElementData = ${value}`;
+                } else if (partString === 'Element') {
+                    value = element ? 1 : 0;
+                    displayFormula += 'Element';
+                    valueDetails += `Element = ${value}`;
+                } else {
+                    value = parseFloat(partString);
+                    if (!isNaN(value)) {
+                        displayFormula += partString;
+                        valueDetails += partString;
+                    } else {
+                        displayFormula += partString;
+                        valueDetails += `${partString} = Onbekend`;
+                        value = 0;
+                    }
+                }
+                formulaParts.push(value);
+
+                if (index < formula.length - 1) {
+                    valueDetails += ', ';
+                }
+            });
+
+            return { display: displayFormula, values: valueDetails };
+        }
+
+        function evaluateFormula(formula, material, groupNorm, elementSurface, kozijnSurface, elementData, element) {
+            const warnings = [];
+            let formulaString = '';
+
+            if (!Array.isArray(formula) || formula.length === 0) {
+                warnings.push('Geen formule gedefinieerd.');
+                return { time: 'N/A', warnings };
+            }
+
+            console.log('Formule voor evaluatie:', formula);
+            console.log('Material voor formule:', material);
+
+            formula.forEach(part => {
+                let partString = part;
+                let normValue = null;
+
+                if (typeof part === 'string' && part.toLowerCase().startsWith('norm (') && part.endsWith(')')) {
+                    const match = part.match(/^norm\s*\((\d*\.?\d+)\)$/i);
+                    if (match) {
+                        normValue = parseFloat(match[1]);
+                        partString = 'norm';
+                    } else {
+                        console.warn(`Ongeldige norm-formaat: ${part}`);
+                        warnings.push(`Ongeldige norm-formaat: ${part}`);
+                    }
+                } else if (typeof part === 'object' && part.type === 'norm' && part.value) {
+                    normValue = parseFloat(part.value);
+                    partString = 'norm';
+                } else if (typeof part === 'string' && part.toLowerCase().startsWith('element (') && part.endsWith(')')) {
+                    const match = part.match(/^element\s*\(([^)]+)\)$/i);
+                    if (match) {
+                        const property = match[1].trim();
+                        partString = `element_${property.toLowerCase()}`;
+                    } else {
+                        console.warn(`Ongeldig element-formaat: ${part}`);
+                        warnings.push(`Ongeldig element-formaat: ${part}`);
+                    }
+                } else if (typeof part === 'object' && part.type === 'element' && part.property) {
+                    partString = `element_${part.property.toLowerCase()}`;
+                } else if (typeof part === 'object' && part.type) {
+                    partString = part.type === 'vrij veld' ? part.value || '0' : part.type;
+                    if (['m1', 'm2'].includes(part.type) && (part.material || part.name || part.profile)) {
+                        partString = part.type.toUpperCase();
+                        partString += ' (';
+                        if (part.material) partString += part.material;
+                        if (part.name) partString += `, ${part.name}`;
+                        if (part.profile) partString += `, ${part.profile}`;
+                        partString += ')';
+                    }
+                    if (part.type === '×') partString = '*';
+                    if (part.type === '÷') partString = '/';
+                } else if (typeof part !== 'string') {
+                    console.warn('Ongeldig formuleonderdeel:', part);
+                    warnings.push(`Ongeldig formuleonderdeel: ${JSON.stringify(part)}`);
+                    formulaString += '0';
+                    return;
+                }
+
+                if (partString.toLowerCase() === 'norm') {
+                    const value = normValue !== null ? normValue : (material && material.Norm !== undefined ? material.Norm : (groupNorm !== undefined ? groupNorm : 0));
+                    console.log('Norm waarde:', value);
+                    if (value === undefined || value === 0) {
+                        warnings.push('Norm is niet gedefinieerd of 0.');
+                    }
+                    formulaString += value;
+                } else if (partString.toLowerCase() === 'm1' || partString.startsWith('M1 ')) {
+                    const m1Value = material && material.M1 !== undefined ? material.M1 : 0;
+                    formulaString += m1Value;
+                } else if (partString.toLowerCase() === 'm2' || partString.startsWith('M2 ')) {
+                    const m2Value = material && material.M2 !== undefined ? material.M2 : 0;
+                    formulaString += m2Value;
+                } else if (partString === 'ElementSurface') {
+                    formulaString += (elementSurface || 0);
+                } else if (partString === 'KozijnSurface') {
+                    formulaString += (kozijnSurface || 0);
+                } else if (partString === 'element_length') {
+                    const value = element && element.Length !== undefined ? element.Length : 0;
+                    formulaString += value;
+                } else if (partString === 'element_thickness') {
+                    const value = element && element.Thickness !== undefined ? element.Thickness : 0;
+                    formulaString += value;
+                } else if (partString === 'element_height') {
+                    const value = element && element.Height !== undefined ? element.Height : 0;
+                    formulaString += value;
+                } else if (partString === 'element_weight') {
+                    const value = element && element.Weight !== undefined ? element.Weight : 0;
+                    formulaString += value;
+                } else if (partString === 'ElementData') {
+                    formulaString += (elementData ? elementData.length : 0);
+                } else if (partString === 'Element') {
+                    formulaString += (element ? 1 : 0);
+                } else if (['+', '-', '*', '/', '(', ')'].includes(partString)) {
+                    formulaString += partString;
+                } else {
+                    const number = parseFloat(partString);
+                    if (!isNaN(number)) {
+                        formulaString += number;
+                    } else {
+                        console.warn(`Ongeldige formulecomponent: ${partString}`);
+                        warnings.push(`Ongeldige formulecomponent: ${partString}`);
+                        formulaString += '0';
+                    }
+                }
+            });
+
+            console.log('Samengestelde formule string:', formulaString);
+
+            let result;
+            try {
+                result = eval(formulaString);
+                if (isNaN(result) || !isFinite(result)) {
+                    warnings.push('Formule resulteert in een ongeldige waarde (NaN of oneindig).');
+                    return { time: 'N/A', warnings };
+                }
+                return { time: result.toFixed(2), warnings };
+            } catch (error) {
+                console.error('Fout bij evalueren formule:', formulaString, error);
+                warnings.push(`Fout bij evalueren formule: ${error.message}`);
+                return { time: 'N/A', warnings };
+            }
+        }
+
+        function calculateProcessingTime(jsonData, selectedElement) {
+            console.log('Start calculateProcessingTime met jsonData:', jsonData);
+            console.log('Geselecteerd element:', selectedElement);
+
+            const { materialLibrary, groupFormulas, groupNorms, options } = loadData();
+            const projectOptions = selectedProject && selectedProject.options ? selectedProject.options : [];
+            const filteredOptions = options.filter(opt => projectOptions.includes(opt.name));
+            console.log('Gefilterde opties:', filteredOptions);
+
+            const positionZoneMapping = selectedProject && selectedProject.positionZoneMapping ? selectedProject.positionZoneMapping : {
+                framen: [],
+                binnenfolie: [],
+                sluiting: []
+            };
+            if (!positionZoneMapping || typeof positionZoneMapping !== 'object') {
+                console.warn('positionZoneMapping is ongeldig, fallback naar standaard:', positionZoneMapping);
+                positionZoneMapping = { framen: [], binnenfolie: [], sluiting: [] };
+            }
+            positionZoneMapping.framen = Array.isArray(positionZoneMapping.framen) ? positionZoneMapping.framen : [];
+            positionZoneMapping.binnenfolie = Array.isArray(positionZoneMapping.binnenfolie) ? positionZoneMapping.binnenfolie : [];
+            positionZoneMapping.sluiting = Array.isArray(positionZoneMapping.sluiting) ? positionZoneMapping.sluiting : [];
+            console.log('PositionZoneMapping:', positionZoneMapping);
+
+            const tableBody = document.getElementById('calculationTableBody');
+            const summaryDiv = document.getElementById('summary');
+            const warningDiv = document.getElementById('warningMessage');
+            const optionWarningDiv = document.getElementById('optionWarningMessage');
+            tableBody.innerHTML = '';
+            let totalTime = 0;
+            const zoneTotals = {};
+            const positionTotals = {
+                Framen: 0,
+                'Binnenfolie / Beplating': 0,
+                Sluiting: 0
+            };
+            const positionZoneTotals = {
+                Framen: {},
+                'Binnenfolie / Beplating': {},
+                Sluiting: {}
+            };
+            let hasMissingProcessingTimes = false;
+            const optionWarnings = [];
+            const structureWarnings = [];
+
+            const aggregatedData = {};
+
+            jsonData.forEach((element, elementIndex) => {
+                if (!element || typeof element !== 'object' || (!element.AssemblyPos && !element.Zone)) {
+                    console.error(`Ongeldig element op index ${elementIndex}:`, element);
+                    structureWarnings.push(`Element ${elementIndex}: Ongeldige structuur, geen AssemblyPos of Zone.`);
+                    hasMissingProcessingTimes = true;
+                    return;
+                }
+
+                if (element.AssemblyPos && Array.isArray(element.Data)) {
+                    if (selectedElement !== 'all' && element.AssemblyPos !== selectedElement) {
+                        return;
+                    }
+
+                    const elementSurface = element.Surface || 0;
+                    let kozijnSurface = 0;
+                    element.Data.forEach(item => {
+                        if (item && item.Material && item.Material.toLowerCase().includes('kozijn')) {
+                            kozijnSurface += item.Surface || 0;
+                        }
+                    });
+
+                    if (!element.Data || !Array.isArray(element.Data)) {
+                        console.error(`Geen geldige Data-array in element ${elementIndex}:`, element);
+                        structureWarnings.push(`Element ${elementIndex} (AssemblyPos: ${element.AssemblyPos}): Geen geldige Data-array.`);
+                        hasMissingProcessingTimes = true;
+                        return;
+                    }
+
+                    element.Data.forEach((item, itemIndex) => {
+                        if (!item || typeof item !== 'object') {
+                            console.error(`Ongeldig item in element.Data op index ${itemIndex}:`, item);
+                            structureWarnings.push(`Element ${elementIndex} (AssemblyPos: ${element.AssemblyPos}), item ${itemIndex}: Ongeldig object.`);
+                            hasMissingProcessingTimes = true;
+                            return;
+                        }
+                        if (!item.Material || !item.Name || !item.Profile) {
+                            console.error(`Ongeldige Data-structuur in element ${elementIndex}, item ${itemIndex}:`, item);
+                            structureWarnings.push(`Element ${elementIndex} (AssemblyPos: ${element.AssemblyPos}), item ${itemIndex}: Material, Name of Profile ontbreekt.`);
+                            hasMissingProcessingTimes = true;
+                            return;
+                        }
+                        const materialId = `${item.Material}_${item.Name}_${item.Profile}`;
+                        const zoneKey = `${element.AssemblyPos}_${item.Zone}_${materialId}`;
+                        if (!aggregatedData[zoneKey]) {
+                            aggregatedData[zoneKey] = {
+                                element: element.AssemblyPos,
+                                zone: item.Zone,
+                                materialId: materialId,
+                                materialName: `${item.Material} ${item.Name} ${item.Profile}`,
+                                M1: 0,
+                                M2: 0,
+                                count: 0
+                            };
+                        }
+                        aggregatedData[zoneKey].M1 += item.M1 || 0;
+                        aggregatedData[zoneKey].M2 += item.M2 || 0;
+                        aggregatedData[zoneKey].count += item.Number || 1;
+                    });
+
+                    filteredOptions.forEach(option => {
+                        if (!element.Data || !Array.isArray(element.Data)) {
+                            console.error('Geen Data beschikbaar voor element:', element);
+                            structureWarnings.push(`Element ${elementIndex} (AssemblyPos: ${element.AssemblyPos}) heeft geen geldige Data-array.`);
+                            hasMissingProcessingTimes = true;
+                            return;
+                        }
+
+                        if (!option.formula || !Array.isArray(option.formula)) {
+                            console.warn(`Ongeldige formule voor optie "${option.name}":`, option.formula);
+                            optionWarnings.push(`Optie "${option.name}": Geen geldige formule gedefinieerd.`);
+                            hasMissingProcessingTimes = true;
+                            return;
+                        }
+
+                        let materialForOption = { Norm: 0.1, M1: 0, M2: 0 };
+                        option.formula.forEach(part => {
+                            if (typeof part === 'string' && (part.startsWith('M1 ') || part.startsWith('M2 '))) {
+                                const match = part.match(/^(M1|M2)\s*\(([^,]+)(?:,\s*([^,]+))?(?:,\s*([^)]+))?\)/);
+                                if (match) {
+                                    const type = match[1];
+                                    const materialName = match[2]?.trim();
+                                    const name = match[3]?.trim() || '';
+                                    const profile = match[4]?.trim() || '';
+                                    const matchingMaterial = element.Data.find(item =>
+                                        item &&
+                                        item.Material &&
+                                        item.Material === materialName &&
+                                        (name ? item.Name === name : true) &&
+                                        (profile ? item.Profile === profile : true)
+                                    );
+                                    if (matchingMaterial) {
+                                        materialForOption[type] = matchingMaterial[type] || 0;
+                                    } else {
+                                        console.warn(`Geen overeenkomend materiaal gevonden in element.Data voor ${part}`);
+                                        optionWarnings.push(`Optie "${option.name}": Geen overeenkomend materiaal voor ${part}`);
+                                    }
+                                } else {
+                                    console.warn(`Ongeldige M1/M2-formule voor optie "${option.name}": ${part}`);
+                                    optionWarnings.push(`Optie "${option.name}": Ongeldige M1/M2-formule: ${part}`);
+                                }
+                            } else if (typeof part === 'string' && part.toLowerCase().startsWith('norm (') && part.endsWith(')')) {
+                                const match = part.match(/^norm\s*\((\d*\.?\d+)\)$/i);
+                                if (match) {
+                                    materialForOption.Norm = parseFloat(match[1]);
+                                } else {
+                                    console.warn(`Ongeldige norm-formaat in formule voor optie "${option.name}": ${part}`);
+                                    optionWarnings.push(`Optie "${option.name}": Ongeldige norm-formaat: ${part}`);
+                                }
+                            } else if (typeof part === 'object' && part.type === 'norm' && part.value) {
+                                materialForOption.Norm = parseFloat(part.value);
+                            }
+                        });
+
+                        console.log(`MaterialForOption voor optie "${option.name}":`, materialForOption);
+
+                        const formulaFormat = formatFormula(option.formula, materialForOption, null, elementSurface, kozijnSurface, element.Data, element);
+                        const result = evaluateFormula(option.formula, materialForOption, null, elementSurface, kozijnSurface, element.Data, element);
+
+                        if (result.warnings.length > 0) {
+                            result.warnings.forEach(warning => {
+                                optionWarnings.push(`Element ${element.AssemblyPos}, Optie "${option.name}": ${warning}`);
+                            });
+                        }
+
+                        if (!isNaN(parseFloat(result.time))) {
+                            const time = parseFloat(result.time);
+                            totalTime += time;
+                            const optionZone = parseInt(option.zone || element.AssemblyPos);
+                            console.log(`Option zone voor optie "${option.name}":`, optionZone);
+                            if (!zoneTotals[optionZone]) {
+                                zoneTotals[optionZone] = 0;
+                            }
+                            zoneTotals[optionZone] += time;
+
+                            let position = 'Onbekend';
+                            if (positionZoneMapping.framen.includes(optionZone)) {
+                                position = 'Framen';
+                            } else if (positionZoneMapping.binnenfolie.includes(optionZone)) {
+                                position = 'Binnenfolie / Beplating';
+                            } else if (positionZoneMapping.sluiting.includes(optionZone)) {
+                                position = 'Sluiting';
+                            }
+
+                            positionTotals[position] += time;
+                            if (!positionZoneTotals[position][optionZone]) {
+                                positionZoneTotals[position][optionZone] = 0;
+                            }
+                            positionZoneTotals[position][optionZone] += time;
+
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${option.zone || element.AssemblyPos}</td>
+                                <td>${option.name} (Niet-getekend) (${element.Data.length}x)</td>
+                                <td>${formulaFormat.display}<br>${formulaFormat.values}</td>
+                                <td>${result.time}</td>
+                            `;
+                            tableBody.appendChild(row);
+                        } else {
+                            hasMissingProcessingTimes = true;
+                        }
+                    });
+
+                } else if (element.Zone && Array.isArray(element.Materials)) {
+                    const elementName = 'Standaard Element';
+                    if (selectedElement !== 'all' && selectedElement !== elementName) {
+                        return;
+                    }
+
+                    const elementSurface = element.Surface || 0;
+                    let kozijnSurface = 0;
+                    element.Materials.forEach(item => {
+                        if (item && item.Material && item.Material.toLowerCase().includes('kozijn')) {
+                            kozijnSurface += item.Surface || 0;
+                        }
+                    });
+
+                    if (!element.Materials || !Array.isArray(element.Materials)) {
+                        console.error(`Geen geldige Materials-array in element ${elementIndex}:`, element);
+                        structureWarnings.push(`Element ${elementIndex} (Zone: ${element.Zone}): Geen geldige Materials-array.`);
+                        hasMissingProcessingTimes = true;
+                        return;
+                    }
+
+                    element.Materials.forEach((item, itemIndex) => {
+                        if (!item || typeof item !== 'object') {
+                            console.error(`Ongeldig item in element.Materials op index ${itemIndex}:`, item);
+                            structureWarnings.push(`Element ${elementIndex} (Zone: ${element.Zone}), item ${itemIndex}: Ongeldig object.`);
+                            hasMissingProcessingTimes = true;
+                            return;
+                        }
+                        if (!item.Material || !item.Name || !item.Profile) {
+                            console.error(`Ongeldige Materials-structuur in element ${elementIndex}, item ${itemIndex}:`, item);
+                            structureWarnings.push(`Element ${elementIndex} (Zone: ${element.Zone}), item ${itemIndex}: Material, Name of Profile ontbreekt.`);
+                            hasMissingProcessingTimes = true;
+                            return;
+                        }
+                        const materialId = `${item.Material}_${item.Name}_${item.Profile}`;
+                        const zoneKey = `${elementName}_${element.Zone}_${materialId}`;
+                        if (!aggregatedData[zoneKey]) {
+                            aggregatedData[zoneKey] = {
+                                element: elementName,
+                                zone: item.Zone,
+                                materialId: materialId,
+                                materialName: `${item.Material} ${item.Name} ${item.Profile}`,
+                                M1: 0,
+                                M2: 0,
+                                count: 0
+                            };
+                        }
+                        aggregatedData[zoneKey].M1 += item.M1 || 0;
+                        aggregatedData[zoneKey].M2 += item.M2 || 0;
+                        aggregatedData[zoneKey].count += 1;
+                    });
+
+                    filteredOptions.forEach(option => {
+                        if (!element.Materials || !Array.isArray(element.Materials)) {
+                            console.error('Geen Materials beschikbaar voor element:', element);
+                            structureWarnings.push(`Element ${elementIndex} (Zone: ${element.Zone}) heeft geen geldige Materials-array.`);
+                            hasMissingProcessingTimes = true;
+                            return;
+                        }
+
+                        if (!option.formula || !Array.isArray(option.formula)) {
+                            console.warn(`Ongeldige formule voor optie "${option.name}":`, option.formula);
+                            optionWarnings.push(`Optie "${option.name}": Geen geldige formule gedefinieerd.`);
+                            hasMissingProcessingTimes = true;
+                            return;
+                        }
+
+                        let materialForOption = { Norm: 0.1, M1: 0, M2: 0 };
+                        option.formula.forEach(part => {
+                            if (typeof part === 'string' && (part.startsWith('M1 ') || part.startsWith('M2 '))) {
+                                const match = part.match(/^(M1|M2)\s*\(([^,]+)(?:,\s*([^,]+))?(?:,\s*([^)]+))?\)/);
+                                if (match) {
+                                    const type = match[1];
+                                    const materialName = match[2]?.trim();
+                                    const name = match[3]?.trim() || '';
+                                    const profile = match[4]?.trim() || '';
+                                    const matchingMaterial = element.Materials.find(item =>
+                                        item &&
+                                        item.Material &&
+                                        item.Material === materialName &&
+                                        (name ? item.Name === name : true) &&
+                                        (profile ? item.Profile === profile : true)
+                                    );
+                                    if (matchingMaterial) {
+                                        materialForOption[type] = matchingMaterial[type] || 0;
+                                    } else {
+                                        console.warn(`Geen overeenkomend materiaal gevonden in element.Materials voor ${part}`);
+                                        optionWarnings.push(`Optie "${option.name}": Geen overeenkomend materiaal voor ${part}`);
+                                    }
+                                } else {
+                                    console.warn(`Ongeldige M1/M2-formule voor optie "${option.name}": ${part}`);
+                                    optionWarnings.push(`Optie "${option.name}": Ongeldige M1/M2-formule: ${part}`);
+                                }
+                            } else if (typeof part === 'string' && part.toLowerCase().startsWith('norm (') && part.endsWith(')')) {
+                                const match = part.match(/^norm\s*\((\d*\.?\d+)\)$/i);
+                                if (match) {
+                                    materialForOption.Norm = parseFloat(match[1]);
+                                } else {
+                                    console.warn(`Ongeldige norm-formaat in formule voor optie "${option.name}": ${part}`);
+                                    optionWarnings.push(`Optie "${option.name}": Ongeldige norm-formaat: ${part}`);
+                                }
+                            } else if (typeof part === 'object' && part.type === 'norm' && part.value) {
+                                materialForOption.Norm = parseFloat(part.value);
+                            }
+                        });
+
+                        console.log(`MaterialForOption voor optie "${option.name}":`, materialForOption);
+
+                        const formulaFormat = formatFormula(option.formula, materialForOption, null, elementSurface, kozijnSurface, element.Materials, element);
+                        const result = evaluateFormula(option.formula, materialForOption, null, elementSurface, kozijnSurface, element.Materials, element);
+
+                        if (result.warnings.length > 0) {
+                            result.warnings.forEach(warning => {
+                                optionWarnings.push(`Element ${elementName}, Zone ${element.Zone}, Optie "${option.name}": ${warning}`);
+                            });
+                        }
+
+                        if (!isNaN(parseFloat(result.time))) {
+                            const time = parseFloat(result.time);
+                            totalTime += time;
+                            const optionZone = parseInt(option.zone || element.Zone);
+                            console.log(`Option zone voor optie "${option.name}":`, optionZone);
+                            if (!zoneTotals[optionZone]) {
+                                zoneTotals[optionZone] = 0;
+                            }
+                            zoneTotals[optionZone] += time;
+
+                            let position = 'Onbekend';
+                            if (positionZoneMapping.framen.includes(optionZone)) {
+                                position = 'Framen';
+                            } else if (positionZoneMapping.binnenfolie.includes(optionZone)) {
+                                position = 'Binnenfolie / Beplating';
+                            } else if (positionZoneMapping.sluiting.includes(optionZone)) {
+                                position = 'Sluiting';
+                            }
+
+                            positionTotals[position] += time;
+                            if (!positionZoneTotals[position][optionZone]) {
+                                positionZoneTotals[position][optionZone] = 0;
+                            }
+                            positionZoneTotals[position][optionZone] += time;
+
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${option.zone || element.Zone}</td>
+                                <td>${option.name} (Niet-getekend) (${element.Materials.length}x)</td>
+                                <td>${formulaFormat.display}<br>${formulaFormat.values}</td>
+                                <td>${result.time}</td>
+                            `;
+                            tableBody.appendChild(row);
+                        } else {
+                            hasMissingProcessingTimes = true;
+                        }
+                    });
+                } else {
+                    console.error('Ongeldige elementstructuur:', element);
+                    structureWarnings.push(`Element ${elementIndex} heeft een ongeldige structuur. Verwacht AssemblyPos met Data of Zone met Materials.`);
+                    hasMissingProcessingTimes = true;
+                }
+            });
+
+            console.log('Geaggregeerde data:', aggregatedData);
+
+            const sortedKeys = Object.keys(aggregatedData).sort((a, b) => {
+                const entryA = aggregatedData[a];
+                const entryB = aggregatedData[b];
+                if (entryA.zone !== entryB.zone) {
+                    return entryA.zone - entryB.zone;
+                }
+                return entryA.materialName.localeCompare(entryB.materialName);
+            });
+
+            sortedKeys.forEach(zoneKey => {
+                const entry = aggregatedData[zoneKey];
+                const materialInLibrary = materialLibrary.find(m => m.id === entry.materialId);
+                if (!materialInLibrary) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${entry.zone}</td>
+                        <td>${entry.materialName}</td>
+                        <td>N/A<br>N/A</td>
+                        <td>Materiaal niet gevonden in bibliotheek</td>
+                    `;
+                    tableBody.appendChild(row);
+                    hasMissingProcessingTimes = true;
+                    return;
+                }
+
+                const group = materialInLibrary.Group;
+                const groupNorm = group && groupNorms[group] !== undefined ? groupNorms[group] : null;
+                const materialForCalculation = {
+                    Norm: materialInLibrary.Norm !== undefined ? materialInLibrary.Norm : (groupNorm !== undefined ? groupNorm : 0),
+                    M1: entry.M1 || (materialInLibrary.M1 !== undefined ? materialInLibrary.M1 : 0),
+                    M2: entry.M2 || (materialInLibrary.M2 !== undefined ? materialInLibrary.M2 : 0)
+                };
+
+                const groupFormula = group && groupFormulas[group] && groupFormulas[group].length > 0 ? groupFormulas[group] : null;
+                const formula = groupFormula || (materialInLibrary.Formula && materialInLibrary.Formula.length > 0 ? materialInLibrary.Formula : []);
+
+                const formulaFormat = formatFormula(formula, materialForCalculation, groupNorm, 0, 0, null, null);
+                const result = evaluateFormula(formula, materialForCalculation, groupNorm, 0, 0, null, null);
+
+                const row = document.createElement('tr');
+                if (!isNaN(parseFloat(result.time))) {
+                    const time = parseFloat(result.time);
+                    totalTime += time;
+                    if (!zoneTotals[entry.zone]) {
+                        zoneTotals[entry.zone] = 0;
+                    }
+                    zoneTotals[entry.zone] += time;
+
+                    let position = 'Onbekend';
+                    const zoneAsNumber = parseInt(entry.zone);
+                    if (positionZoneMapping.framen.includes(zoneAsNumber)) {
+                        position = 'Framen';
+                    } else if (positionZoneMapping.binnenfolie.includes(zoneAsNumber)) {
+                        position = 'Binnenfolie / Beplating';
+                    } else if (positionZoneMapping.sluiting.includes(zoneAsNumber)) {
+                        position = 'Sluiting';
+                    }
+
+                    positionTotals[position] += time;
+                    if (!positionZoneTotals[position][entry.zone]) {
+                        positionZoneTotals[position][entry.zone] = 0;
+                    }
+                    positionZoneTotals[position][entry.zone] += time;
+
+                    row.innerHTML = `
+                        <td>${entry.zone}</td>
+                        <td>${entry.materialName} (${entry.count}x)</td>
+                        <td>${formulaFormat.display}<br>${formulaFormat.values}</td>
+                        <td>${result.time}</td>
+                    `;
+                } else {
+                    hasMissingProcessingTimes = true;
+                    row.innerHTML = `
+                        <td>${entry.zone}</td>
+                        <td>${entry.materialName} (${entry.count}x)</td>
+                        <td>${formulaFormat.display}<br>${formulaFormat.values}</td>
+                        <td>Geen geldige formule of norm</td>
+                    `;
+                }
+                tableBody.appendChild(row);
+            });
+
+            let summaryHTML = `<h3>Totale bewerkingstijd: ${totalTime.toFixed(2)}</h3>`;
+            summaryHTML += '<h4>Subtotaal per positie:</h4>';
+            Object.keys(positionTotals).sort().forEach(position => {
+                summaryHTML += `<h5>${position}: ${positionTotals[position].toFixed(2)}</h5>`;
+                summaryHTML += '<ul>';
+                const zones = Object.keys(positionZoneTotals[position]).sort((a, b) => a - b);
+                zones.forEach(zone => {
+                    summaryHTML += `<li>Zone ${zone}: ${positionZoneTotals[position][zone].toFixed(2)}</li>`;
+                });
+                summaryHTML += '</ul>';
+            });
+
+            summaryDiv.innerHTML = summaryHTML;
+
+            if (hasMissingProcessingTimes) {
+                warningDiv.innerHTML = 'Waarschuwing: Niet alle regels hebben een geldige bewerkingstijd. Controleer de formules en normen.';
+            } else {
+                warningDiv.innerHTML = '';
+            }
+
+            if (optionWarnings.length > 0) {
+                optionWarningDiv.innerHTML = '<h4>Waarschuwingen bij opties:</h4><ul>' + 
+                    optionWarnings.map(warning => `<li>${warning}</li>`).join('') + '</ul>';
+            } else {
+                optionWarningDiv.innerHTML = '';
+            }
+
+            if (structureWarnings.length > 0) {
+                optionWarningDiv.innerHTML += '<h4>Waarschuwingen bij elementstructuur:</h4><ul>' + 
+                    structureWarnings.map(warning => `<li>${warning}</li>`).join('') + '</ul>';
+            }
+
+            console.log('Einde calculateProcessingTime. Totale tijd:', totalTime);
+        }
+
+        window.onload = function() {
+            const { projects, materialLibrary } = loadData();
+            console.log('Opgeslagen projecten:', projects);
+            console.log('Huidige materialLibrary:', materialLibrary);
+            const projectFilter = document.getElementById('projectFilter');
+            projectFilter.innerHTML = '<option value="">Kies een project</option>';
+            projects.forEach(project => {
+                console.log('Toevoegen project aan dropdown:', project.number);
+                const option = document.createElement('option');
+                option.value = project.number;
+                option.textContent = project.number;
+                projectFilter.appendChild(option);
+            });
+
+            if (projects.length > 0) {
+                console.log('Selecteer eerste project:', projects[0].number);
+                projectFilter.value = projects[0].number;
+                updateProject();
+            } else {
+                console.log('Geen projecten beschikbaar om te selecteren.');
+            }
+        };
+    </script>
+</body>
+</html>
