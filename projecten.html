@@ -5,6 +5,60 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Projecten</title>
     <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Basisstyling voor de modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 20px;
+            width: 400px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+        .modal-content h3 {
+            margin-top: 0;
+        }
+        .modal-content label {
+            display: block;
+            margin: 10px 0 5px;
+        }
+        .modal-content input[type="text"] {
+            width: 100%;
+            padding: 5px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .modal-content button {
+            padding: 8px 16px;
+            margin-right: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .modal-content button:first-of-type {
+            background-color: #007bff;
+            color: white;
+        }
+        .modal-content button:last-of-type {
+            background-color: #dc3545;
+            color: white;
+        }
+        /* Styling voor tabelinteractie */
+        table input[type="file"] {
+            width: 100%;
+        }
+    </style>
 </head>
 <body>
     <nav>
@@ -17,79 +71,220 @@
     </nav>
     <main>
         <h1>Projecten</h1>
-        <p>Hier kunt u projecten toevoegen en de positie-zoneverdeling instellen.</p>
-        <div>
+        <p>Beheer hier je projecten.</p>
+        <form id="projectForm">
             <label for="projectNumber">Projectnummer:</label>
-            <input type="text" id="projectNumber" placeholder="Bijv. 001">
-        </div>
-        <div>
-            <label for="jsonFile">Upload JSON-bestand:</label>
-            <input type="file" id="jsonFile" accept=".json">
-        </div>
-        <div>
-            <h3>Positie-Zoneverdeling</h3>
-            <p>Voer zones in voor elke positie (komma-gescheiden, bijv. 1,2,-3):</p>
-            <div id="zoneSelection">
-                <div>
-                    <label for="framenZones">Framen:</label>
-                    <input type="text" id="framenZones" placeholder="Bijv. 1,2,-3">
-                </div>
-                <div>
-                    <label for="binnenfolieZones">Binnenfolie / Beplating:</label>
-                    <input type="text" id="binnenfolieZones" placeholder="Bijv. 4,5,-6">
-                </div>
-                <div>
-                    <label for="sluitingZones">Sluiting:</label>
-                    <input type="text" id="sluitingZones" placeholder="Bijv. 7,8,-9">
-                </div>
-            </div>
-        </div>
-        <button onclick="voegProjectToe()">Project toevoegen</button>
-        <h2>Projectenlijst</h2>
-        <table id="projectenLijst">
+            <input type="text" id="projectNumber" required>
+            <label for="projectName">Projectnaam:</label>
+            <input type="text" id="projectName" required>
+            <button type="submit">Opslaan</button>
+        </form>
+        <table id="projectTable">
             <thead>
                 <tr>
                     <th>Projectnummer</th>
-                    <th>Framen Zones</th>
-                    <th>Binnenfolie / Beplating Zones</th>
-                    <th>Sluiting Zones</th>
+                    <th>Projectnaam</th>
+                    <th>JSON-bestanden</th>
+                    <th>Opties</th>
+                    <th>Positie - Zone Verdeling</th>
+                    <th>Acties</th>
                 </tr>
             </thead>
-            <tbody></tbody>
+            <tbody id="projectTableBody"></tbody>
         </table>
     </main>
 
+    <!-- Modal voor Positie-Zone Verdeling -->
+    <div id="positionZoneModal" class="modal">
+        <div class="modal-content">
+            <h3>Positie - Zone Verdeling</h3>
+            <label for="framenZones">Framen (komma-gescheiden, bijv. 1,2,-3):</label>
+            <input type="text" id="framenZones" placeholder="Bijv. 1,2,-3">
+            <label for="binnenfolieZones">Binnenfolie / Beplating (komma-gescheiden, bijv. 1,2,-3):</label>
+            <input type="text" id="binnenfolieZones" placeholder="Bijv. 1,2,-3">
+            <label for="sluitingZones">Sluiting (komma-gescheiden, bijv. 1,2,-3):</label>
+            <input type="text" id="sluitingZones" placeholder="Bijv. 1,2,-3">
+            <button onclick="savePositionZoneMapping()">Opslaan</button>
+            <button onclick="closeModal()">Annuleren</button>
+        </div>
+    </div>
+
     <script>
-        let jsonData = [];
+        let currentProjectIndex = null;
+        let allOptions = [];
 
-        document.getElementById('jsonFile').addEventListener('change', function(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    try {
-                        jsonData = JSON.parse(e.target.result);
-                        console.log('JSON-data geladen:', jsonData);
-                    } catch (error) {
-                        alert('Fout bij het laden van het JSON-bestand: ' + error.message);
-                    }
-                };
-                reader.readAsText(file);
-            }
-        });
+        function loadData() {
+            const materialLibrary = JSON.parse(localStorage.getItem('materialLibrary')) || [];
+            const groupFormulas = JSON.parse(localStorage.getItem('groupFormulas')) || {};
+            const groupNorms = JSON.parse(localStorage.getItem('groupNorms')) || {};
+            const options = JSON.parse(localStorage.getItem('options')) || [];
+            const projects = JSON.parse(localStorage.getItem('projects')) || [];
+            return { materialLibrary, groupFormulas, groupNorms, options, projects };
+        }
 
-        function voegProjectToe() {
-            const projectNumber = document.getElementById('projectNumber').value;
-            if (!projectNumber) {
-                alert('Voer een projectnummer in.');
-                return;
-            }
+        function populateOptions() {
+            const { options } = loadData();
+            allOptions = options; // Bewaar opties globaal voor gebruik in de tabel
+        }
 
+        function populateProjects() {
+            const { projects } = loadData();
+            const tableBody = document.getElementById('projectTableBody');
+            tableBody.innerHTML = '';
+            projects.forEach((project, index) => {
+                const row = document.createElement('tr');
+                const positionZoneMapping = project.positionZoneMapping || { framen: [], binnenfolie: [], sluiting: [] };
+                const mappingDisplay = `
+                    Framen: ${positionZoneMapping.framen.join(', ') || '-'}<br>
+                    Binnenfolie / Beplating: ${positionZoneMapping.binnenfolie.join(', ') || '-'}<br>
+                    Sluiting: ${positionZoneMapping.sluiting.join(', ') || '-'}
+                `;
+
+                const fileInputId = `jsonFiles-${index}`;
+                const optionsSelectId = `options-${index}`;
+
+                row.innerHTML = `
+                    <td>${project.number}</td>
+                    <td>${project.name}</td>
+                    <td>
+                        <input type="file" id="${fileInputId}" multiple accept=".json">
+                        <div>${project.jsonFiles ? project.jsonFiles.map(file => file.name).join(', ') : '-'}</div>
+                    </td>
+                    <td>
+                        <select id="${optionsSelectId}" multiple>
+                            ${allOptions.map(opt => `
+                                <option value="${opt.name}" ${project.options && project.options.includes(opt.name) ? 'selected' : ''}>
+                                    ${opt.name}
+                                </option>
+                            `).join('')}
+                        </select>
+                    </td>
+                    <td><a href="#" onclick="openPositionZoneModal(${index})">${mappingDisplay}</a></td>
+                    <td>
+                        <button onclick="deleteProject(${index})">Verwijderen</button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+
+                document.getElementById(fileInputId).addEventListener('change', (event) => {
+                    const files = event.target.files;
+                    const jsonFiles = [];
+                    let filesProcessed = 0;
+
+                    if (files.length === 0) return;
+
+                    // Haal huidige materialLibrary op
+                    let materialLibrary = JSON.parse(localStorage.getItem('materialLibrary')) || [];
+
+                    Array.from(files).forEach(file => {
+                        const fileReader = new FileReader();
+                        fileReader.onload = function(e) {
+                            try {
+                                const parsedData = JSON.parse(e.target.result);
+                                console.log('Geparseerde JSON-data:', parsedData); // Log JSON-inhoud
+                                const fileData = {
+                                    name: file.name,
+                                    data: parsedData
+                                };
+                                jsonFiles.push(fileData);
+
+                                // Extraheer unieke materialen uit het JSON-bestand
+                                if (Array.isArray(parsedData)) {
+                                    parsedData.forEach(element => {
+                                        // Controleer zowel Data als Materials arrays
+                                        const items = (element.Data && Array.isArray(element.Data)) ? element.Data :
+                                                     (element.Materials && Array.isArray(element.Materials)) ? element.Materials : [];
+                                        items.forEach(item => {
+                                            if (item && item.Material && item.Name && item.Profile) {
+                                                const materialId = `${item.Material}_${item.Name}_${item.Profile}`;
+                                                // Controleer of materiaal al bestaat
+                                                const exists = materialLibrary.some(m => m.id === materialId);
+                                                if (!exists) {
+                                                    console.log('Nieuw materiaal toegevoegd:', materialId); // Log nieuw materiaal
+                                                    materialLibrary.push({
+                                                        id: materialId,
+                                                        Material: item.Material,
+                                                        Name: item.Name,
+                                                        Profile: item.Profile,
+                                                        M1: item.M1 || 0,
+                                                        M2: item.M2 || 0,
+                                                        Norm: item.Norm || 0,
+                                                        Group: item.Group || '',
+                                                        Formula: item.Formula || []
+                                                    });
+                                                }
+                                            } else {
+                                                console.warn('Ongeldig item in JSON:', item); // Log ongeldige items
+                                            }
+                                        });
+                                    });
+                                } else {
+                                    console.warn('JSON-data is geen array:', parsedData);
+                                }
+
+                                filesProcessed++;
+                                if (filesProcessed === files.length) {
+                                    // Sla bijgewerkte materialLibrary en projects op
+                                    localStorage.setItem('materialLibrary', JSON.stringify(materialLibrary));
+                                    projects[index].jsonFiles = jsonFiles;
+                                    localStorage.setItem('projects', JSON.stringify(projects));
+                                    populateProjects();
+                                    console.log('Bijgewerkte materialLibrary:', materialLibrary);
+                                }
+                            } catch (error) {
+                                console.error('Fout bij het parsen van JSON-bestand:', file.name, error);
+                                filesProcessed++;
+                                if (filesProcessed === files.length) {
+                                    projects[index].jsonFiles = jsonFiles;
+                                    localStorage.setItem('projects', JSON.stringify(projects));
+                                    populateProjects();
+                                }
+                            }
+                        };
+                        fileReader.readAsText(file);
+                    });
+                });
+
+                document.getElementById(optionsSelectId).addEventListener('change', (event) => {
+                    console.log(`Voor opties-update - jsonFiles voor project ${index}:`, JSON.stringify(projects[index].jsonFiles));
+                    const selectedOptions = Array.from(event.target.selectedOptions).map(opt => opt.value);
+                    const updatedProject = { ...projects[index], options: selectedOptions }; // Maak een kopie
+                    projects[index] = updatedProject;
+                    console.log(`Na opties-update - jsonFiles voor project ${index}:`, JSON.stringify(projects[index].jsonFiles));
+                    localStorage.setItem('projects', JSON.stringify(projects));
+                    populateProjects();
+                });
+            });
+        }
+
+        function openPositionZoneModal(index) {
+            currentProjectIndex = index;
+            const { projects } = loadData();
+            const project = projects[index];
+            const positionZoneMapping = project.positionZoneMapping || { framen: [], binnenfolie: [], sluiting: [] };
+
+            // Vul de invoervelden met de huidige zones
+            document.getElementById('framenZones').value = positionZoneMapping.framen.join(', ') || '';
+            document.getElementById('binnenfolieZones').value = positionZoneMapping.binnenfolie.join(', ') || '';
+            document.getElementById('sluitingZones').value = positionZoneMapping.sluiting.join(', ') || '';
+
+            document.getElementById('positionZoneModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('positionZoneModal').style.display = 'none';
+            currentProjectIndex = null;
+        }
+
+        function savePositionZoneMapping() {
+            if (currentProjectIndex === null) return;
+            const { projects } = loadData();
+
+            // Haal de waarden uit de invoervelden en converteer naar arrays
             const framenZonesInput = document.getElementById('framenZones').value;
             const binnenfolieZonesInput = document.getElementById('binnenfolieZones').value;
             const sluitingZonesInput = document.getElementById('sluitingZones').value;
 
-            // Converteer comma-gescheiden input naar arrays van getallen (inclusief negatieve getallen)
             const framenZones = framenZonesInput ? framenZonesInput.split(',').map(num => parseInt(num.trim())).filter(num => !isNaN(num)) : [];
             const binnenfolieZones = binnenfolieZonesInput ? binnenfolieZonesInput.split(',').map(num => parseInt(num.trim())).filter(num => !isNaN(num)) : [];
             const sluitingZones = sluitingZonesInput ? sluitingZonesInput.split(',').map(num => parseInt(num.trim())).filter(num => !isNaN(num)) : [];
@@ -100,46 +295,40 @@
                 sluiting: sluitingZones
             };
 
-            const projects = JSON.parse(localStorage.getItem('projects')) || [];
-            projects.push({
-                number: projectNumber,
-                positionZoneMapping: positionZoneMapping,
-                jsonFiles: [{ data: jsonData }]
-            });
+            projects[currentProjectIndex].positionZoneMapping = positionZoneMapping;
             localStorage.setItem('projects', JSON.stringify(projects));
-
-            const tableBody = document.getElementById('projectenLijst').getElementsByTagName('tbody')[0];
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${projectNumber}</td>
-                <td>${framenZones.join(', ') || 'Geen'}</td>
-                <td>${binnenfolieZones.join(', ') || 'Geen'}</td>
-                <td>${sluitingZones.join(', ') || 'Geen'}</td>
-            `;
-            tableBody.appendChild(row);
-
-            // Reset het formulier
-            document.getElementById('projectNumber').value = '';
-            document.getElementById('jsonFile').value = '';
-            document.getElementById('framenZones').value = '';
-            document.getElementById('binnenfolieZones').value = '';
-            document.getElementById('sluitingZones').value = '';
-            jsonData = [];
+            populateProjects();
+            closeModal();
         }
 
-        window.onload = function() {
-            const projects = JSON.parse(localStorage.getItem('projects')) || [];
-            const tableBody = document.getElementById('projectenLijst').getElementsByTagName('tbody')[0];
-            projects.forEach(project => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${project.number}</td>
-                    <td>${project.positionZoneMapping.framen.join(', ') || 'Geen'}</td>
-                    <td>${project.positionZoneMapping.binnenfolie.join(', ') || 'Geen'}</td>
-                    <td>${project.positionZoneMapping.sluiting.join(', ') || 'Geen'}</td>
-                `;
-                tableBody.appendChild(row);
+        function deleteProject(index) {
+            const { projects } = loadData();
+            projects.splice(index, 1);
+            localStorage.setItem('projects', JSON.stringify(projects));
+            populateProjects();
+        }
+
+        document.getElementById('projectForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const projectNumber = document.getElementById('projectNumber').value;
+            const projectName = document.getElementById('projectName').value;
+
+            const { projects } = loadData();
+            projects.push({
+                number: projectNumber,
+                name: projectName,
+                jsonFiles: [],
+                options: [],
+                positionZoneMapping: { framen: [], binnenfolie: [], sluiting: [] }
             });
+            localStorage.setItem('projects', JSON.stringify(projects));
+            populateProjects();
+            document.getElementById('projectForm').reset();
+        });
+
+        window.onload = function() {
+            populateOptions();
+            populateProjects();
         };
     </script>
 </body>
