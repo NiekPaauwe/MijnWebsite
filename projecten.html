@@ -5,25 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Projecten</title>
     <link rel="stylesheet" href="styles.css">
-    <style>
-        .zone-input {
-            margin: 10px 0;
-        }
-        .zone-input label {
-            display: inline-block;
-            width: 150px;
-        }
-        .zone-input input {
-            width: 300px;
-            padding: 5px;
-        }
-        .project-item {
-            margin-bottom: 10px;
-        }
-        .project-item h3 {
-            margin: 5px 0;
-        }
-    </style>
 </head>
 <body>
     <nav>
@@ -49,15 +30,15 @@
             <h3>Positie-Zoneverdeling</h3>
             <p>Voer zones in voor elke positie (komma-gescheiden, bijv. 1,2,-3):</p>
             <div id="zoneSelection">
-                <div class="zone-input">
+                <div>
                     <label for="framenZones">Framen:</label>
                     <input type="text" id="framenZones" placeholder="Bijv. 1,2,-3">
                 </div>
-                <div class="zone-input">
+                <div>
                     <label for="binnenfolieZones">Binnenfolie / Beplating:</label>
                     <input type="text" id="binnenfolieZones" placeholder="Bijv. 4,5,-6">
                 </div>
-                <div class="zone-input">
+                <div>
                     <label for="sluitingZones">Sluiting:</label>
                     <input type="text" id="sluitingZones" placeholder="Bijv. 7,8,-9">
                 </div>
@@ -118,7 +99,6 @@
 
             const lijst = document.getElementById('projectenLijst');
             const projectDiv = document.createElement('div');
-            projectDiv.className = 'project-item';
             projectDiv.innerHTML = `
                 <h3>Project ${projectNumber}</h3>
                 <p>Framen zones: ${framenZones.join(', ') || 'Geen'}</p>
@@ -141,7 +121,6 @@
             const lijst = document.getElementById('projectenLijst');
             projects.forEach(project => {
                 const projectDiv = document.createElement('div');
-                projectDiv.className = 'project-item';
                 projectDiv.innerHTML = `
                     <h3>Project ${project.number}</h3>
                     <p>Framen zones: ${project.positionZoneMapping.framen.join(', ') || 'Geen'}</p>
